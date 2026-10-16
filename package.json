@@ -44,9 +44,11 @@
     },
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
       "target": ["dmg", "zip"]
     },
     "win": {
+      "icon": "build/icon.png",
       "target": ["nsis", "portable"]
     }
   },

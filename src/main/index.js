@@ -171,6 +171,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 620,
     show: false,
+    icon: join(__dirname, '../../build/icon.png'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
     vibrancy: 'under-window',
