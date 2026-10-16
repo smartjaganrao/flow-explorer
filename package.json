@@ -1,14 +1,54 @@
 {
   "name": "flow-explorer",
+  "productName": "FlowExplorer Pro",
   "version": "1.0.0",
-  "description": "Next-generation macOS File Manager with Windows 11 keyboard ergonomics",
+  "description": "Next-generation desktop file manager combining macOS Liquid Glassmorphism with Windows 11 keyboard ergonomics and AI storage intelligence.",
   "main": "./out/main/index.js",
-  "author": "FlowExplorer",
+  "author": {
+    "name": "Jagan Rao",
+    "email": "smartjaganrao@gmail.com",
+    "url": "https://github.com/smartjaganrao"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartjaganrao/flow-explorer.git"
+  },
+  "homepage": "https://github.com/smartjaganrao/flow-explorer#readme",
+  "bugs": {
+    "url": "https://github.com/smartjaganrao/flow-explorer/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "file-manager",
+    "electron",
+    "macos",
+    "windows-explorer",
+    "glassmorphism",
+    "react",
+    "vite",
+    "productivity",
+    "keyboard-shortcuts"
+  ],
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:mac": "electron-vite build && electron-builder --mac"
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.smartjaganrao.flowexplorer",
+    "productName": "FlowExplorer Pro",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
   },
   "dependencies": {
     "lucide-react": "^1.16.0"

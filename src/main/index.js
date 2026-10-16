@@ -9,6 +9,18 @@ let mainWindow = null
 
 function setupAppMenu() {
   const isMac = process.platform === 'darwin'
+  
+  if (app.setAboutPanelOptions) {
+    app.setAboutPanelOptions({
+      applicationName: 'FlowExplorer Pro',
+      applicationVersion: '1.0.0',
+      version: 'Build 2026.10',
+      copyright: '© 2026 Jagan Rao. Licensed under MIT.',
+      credits: 'Created by Jagan Rao (smartjaganrao)',
+      website: 'https://github.com/smartjaganrao/flow-explorer'
+    })
+  }
+
   const template = [
     ...(isMac ? [{
       label: app.name,

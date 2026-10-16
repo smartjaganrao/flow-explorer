@@ -6679,47 +6679,55 @@ export default function App() {
                 PRO EDITION
               </span>
             </div>
-            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono mt-0.5">Version 1.0.0 (Build 2026.10)</p>
+            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono mt-0.5">Version 1.0.0 (Build 2026.10) • Open Source</p>
 
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-3 max-w-md leading-relaxed">
-              The next-generation desktop file system architected for macOS power users. Unites the keyboard ergonomics of Windows 11 Explorer with Linear / Arc design aesthetics and neural AI storage intelligence.
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-3 max-w-md leading-relaxed text-center">
+              The next-generation desktop file system architected for macOS & Windows power users. Seamlessly unites the high-productivity keyboard ergonomics of Windows 11 Explorer with Liquid Glassmorphism, Dual Split-Pane browsing, and AI-powered storage intelligence.
             </p>
 
             {/* Feature Highlights Grid */}
-            <div className="grid grid-cols-2 gap-2 w-full mt-5 text-left text-xs">
+            <div className="grid grid-cols-2 gap-2 w-full mt-4 text-left text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-start gap-2">
+                <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-slate-900 dark:text-slate-200">Win 11 Action Ribbon</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">F2 rename, Enter to open, Ctrl+C/X/V/Z, Shift+Del</div>
+                </div>
+              </div>
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-start gap-2">
                 <Sparkles className="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-slate-900 dark:text-slate-200">AI Neural Organizer</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Intelligent auto-categorization & semantic naming</div>
+                  <div className="font-semibold text-slate-900 dark:text-slate-200">AI Storage Intelligence</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Heuristic folder reorganizer & category clustering</div>
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-start gap-2">
                 <Trash2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold text-slate-900 dark:text-slate-200">Deep Cleaner & Storage</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">App uninstaller + residual orphaned caches</div>
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-start gap-2">
-                <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-slate-900 dark:text-slate-200">Win 11 Ergonomics</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">F2 rename, Enter open, Alt+Enter inspect</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">App uninstaller + residual cache purging</div>
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-start gap-2">
                 <Gauge className="w-4 h-4 text-purple-500 dark:text-purple-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-slate-900 dark:text-slate-200">System Enhancer</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Live RAM purge, DNS flush, Process telemetry</div>
+                  <div className="font-semibold text-slate-900 dark:text-slate-200">System Performance</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Live RAM purge, DNS flush & task killer</div>
                 </div>
               </div>
             </div>
 
-            {/* System Info Footnote */}
+            {/* System Info & Repository Footnote */}
             <div className="w-full mt-4 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-              <span>Electron + Vite + React 18</span>
+              <a
+                href="https://github.com/smartjaganrao/flow-explorer"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 transition-colors"
+              >
+                <span>github.com/smartjaganrao/flow-explorer</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
               <button
                 onClick={() => {
                   setShowAboutModal(false)
