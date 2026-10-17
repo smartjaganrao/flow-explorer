@@ -34,18 +34,43 @@
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:win": "electron-vite build && electron-builder --win"
+    "build:win": "electron-vite build && electron-builder --win",
+    "install:mac": "electron-vite build && electron-builder --mac --arm64"
   },
   "build": {
     "appId": "com.smartjaganrao.flowexplorer",
     "productName": "FlowExplorer Pro",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
-      "target": ["dmg", "zip"]
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSDesktopFolderUsageDescription": "FlowExplorer Pro requires access to your Desktop to view and manage files.",
+        "NSDocumentsFolderUsageDescription": "FlowExplorer Pro requires access to your Documents folder to view and manage files.",
+        "NSDownloadsFolderUsageDescription": "FlowExplorer Pro requires access to your Downloads folder to view and manage files.",
+        "NSFileProviderDomainUsageDescription": "FlowExplorer Pro requires file system access to display directories."
+      },
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["arm64"]
+        }
+      ]
     },
     "win": {
       "icon": "build/icon.png",
