@@ -266,15 +266,29 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Main Unhandled Rejection]', reason)
 })
 
-app.whenReady().then(() => {
-  setupIpcHandlers()
-  setupAppMenu()
-  createWindow()
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
-})
+
+  app.whenReady().then(() => {
+    setupIpcHandlers()
+    setupAppMenu()
+    createWindow()
+
+    app.on('activate', function () {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -358,7 +372,7 @@ function setupIpcHandlers() {
   // 3. Get Disk Space Stats (Macintosh HD)
   ipcMain.handle('fs:get-disk-space', async () => {
     return new Promise((resolveResult) => {
-      exec('df -k /', (error, stdout) => {
+      exec('df -k /', { timeout: 3000 }, (error, stdout) => {
         if (error || !stdout) {
           resolveResult({
             success: false,
@@ -625,7 +639,7 @@ function setupIpcHandlers() {
   ipcMain.handle('fs:get-git-status', async (_event, dirPath) => {
     return new Promise((resolveResult) => {
       const sanitized = dirPath.replace(/"/g, '\\"')
-      exec(`git -C "${sanitized}" status --porcelain -b 2>/dev/null`, (error, stdout) => {
+      exec(`git -C "${sanitized}" status --porcelain -b 2>/dev/null`, { timeout: 3000 }, (error, stdout) => {
         if (error || !stdout) {
           resolveResult({ isGit: false, branch: '', modifiedCount: 0, untrackedCount: 0 })
           return
