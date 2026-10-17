@@ -170,25 +170,31 @@ function createWindow() {
     height: 890,
     minWidth: 960,
     minHeight: 620,
-    show: false,
+    show: true,
     ...(process.platform !== 'darwin' ? { icon: join(__dirname, '../../build/icon.png') } : {}),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
     vibrancy: 'under-window',
     visualEffectState: 'active',
-    transparent: true,
-    backgroundColor: '#00000000',
+    backgroundColor: '#0F172A',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
+  mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+    mainWindow.focus()
   })
+
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show()
+    }
+  }, 250)
 
   // Windows & Mac keyboard shortcut dispatcher via before-input-event
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -302,6 +308,21 @@ async function getUniqueDestination(destDir, originalName) {
 }
 
 function setupIpcHandlers() {
+  const originalHandle = ipcMain.handle.bind(ipcMain)
+  ipcMain.handle = (channel, listener) => {
+    return originalHandle(channel, async (event, ...args) => {
+      console.log(`[IPC Request] -> ${channel}`)
+      try {
+        const res = await listener(event, ...args)
+        console.log(`[IPC Success] <- ${channel}`)
+        return res
+      } catch (err) {
+        console.error(`[IPC Error] <- ${channel}:`, err)
+        throw err
+      }
+    })
+  }
+
   // 1. Get Home Directory
   ipcMain.handle('fs:get-home', async () => {
     return os.homedir()
@@ -883,7 +904,7 @@ function setupIpcHandlers() {
   // Cache to store generated thumbnails in memory
   const thumbnailCache = new Map()
 
-  // 10. Get High-Resolution File Thumbnail (Images, Documents, PDFs, Text)
+  // 10. Get High-Resolution File Thumbnail (Images and Code/Text Snippets)
   ipcMain.handle('fs:get-thumbnail', async (_event, filePath) => {
     try {
       if (thumbnailCache.has(filePath)) {
@@ -891,9 +912,8 @@ function setupIpcHandlers() {
       }
 
       const ext = extname(filePath).toLowerCase()
-      const imageExts = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.bmp', '.ico', '.tiff', '.heic', '.raw']
+      const imageExts = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.bmp', '.ico']
       const textDocExts = ['.txt', '.md', '.markdown', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.css', '.html', '.yml', '.yaml', '.sql', '.sh', '.csv']
-      const richDocExts = ['.pdf', '.doc', '.docx', '.pages', '.xls', '.xlsx', '.ppt', '.pptx', '.keynote', '.numbers', '.app']
 
       // 1. Image Files: Create crisp resized base64 thumbnail
       if (imageExts.includes(ext)) {
@@ -919,28 +939,10 @@ function setupIpcHandlers() {
             thumbnailCache.set(filePath, result)
             return { success: true, ...result }
           }
-        } catch {
-          // fallback to getFileIcon
-        }
+        } catch {}
       }
 
-      // 2. Rich Documents (PDF, Word, Pages, etc.): Get macOS native QuickLook rendered icon
-      if (richDocExts.includes(ext)) {
-        try {
-          const icon = await app.getFileIcon(filePath, { size: 'large' })
-          if (icon && !icon.isEmpty()) {
-            const dataUrl = icon.toDataURL()
-            const result = { type: 'document', thumbnail: dataUrl, ext: ext.replace('.', '') }
-            if (thumbnailCache.size > 800) thumbnailCache.clear()
-            thumbnailCache.set(filePath, result)
-            return { success: true, ...result }
-          }
-        } catch {
-          // fallback
-        }
-      }
-
-      // 3. Text / Code Documents: Read first 250 bytes for visual paper document preview snippet
+      // 2. Text / Code Documents: Read first 250 bytes for visual paper document preview snippet
       if (textDocExts.includes(ext)) {
         try {
           const fd = await fs.open(filePath, 'r')
@@ -951,27 +953,12 @@ function setupIpcHandlers() {
           const result = { type: 'text', snippet, ext: ext.replace('.', '') }
           thumbnailCache.set(filePath, result)
           return { success: true, ...result }
-        } catch {
-          // fallback
-        }
-      }
-
-      // 4. Default: Get OS icon
-      try {
-        const icon = await app.getFileIcon(filePath, { size: 'large' })
-        if (icon && !icon.isEmpty()) {
-          const dataUrl = icon.toDataURL()
-          const result = { type: 'icon', thumbnail: dataUrl }
-          thumbnailCache.set(filePath, result)
-          return { success: true, ...result }
-        }
-      } catch {
-        // fallback
+        } catch {}
       }
 
       return { success: false }
-    } catch (err) {
-      return { success: false, error: err.message }
+    } catch {
+      return { success: false }
     }
   })
 
