@@ -1139,6 +1139,7 @@ export default function App() {
     }
   })
   const [loginItemStatus, setLoginItemStatus] = useState(false)
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false)
 
   // Clipboard State (Windows Explorer operation + sourceDir tracking)
   const [clipboard, setClipboard] = useState({
@@ -3200,10 +3201,11 @@ export default function App() {
   useEffect(() => {
     const handleClick = () => {
       if (contextMenu.visible) setContextMenu((prev) => ({ ...prev, visible: false }))
+      if (systemMenuOpen) setSystemMenuOpen(false)
     }
     window.addEventListener('click', handleClick)
     return () => window.removeEventListener('click', handleClick)
-  }, [contextMenu.visible])
+  }, [contextMenu.visible, systemMenuOpen])
 
   const handleContextMenu = (e, item = null, pane = activePane) => {
     e.preventDefault()
@@ -4001,254 +4003,315 @@ export default function App() {
       </div>
 
       {/* 2. POWER-USER ACTION RIBBON */}
-      <div className="h-10 flex items-center justify-between px-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#0f131d] text-xs z-10">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => {
-              setNewItemDialog({ isOpen: true, type: 'folder', name: 'New Folder' })
-              setTimeout(() => newItemInputRef.current?.select(), 50)
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-slate-700 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors font-semibold"
-            title="New Folder (Cmd+Shift+N)"
-          >
-            <FolderPlus className="w-3.5 h-3.5 text-amber-500" />
-            <span>New Folder</span>
-          </button>
+      <div className="h-10 flex items-center justify-between px-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#0f131d] text-xs z-10 select-none">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2">
+          
+          {/* GROUP 1: Creation Hub */}
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => {
+                setNewItemDialog({ isOpen: true, type: 'folder', name: 'New Folder' })
+                setTimeout(() => newItemInputRef.current?.select(), 50)
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-slate-700 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors font-semibold"
+              title="New Folder (Ctrl+Shift+N / ⌘Shift+N)"
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <span className="hidden sm:inline">New Folder</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setNewItemDialog({ isOpen: true, type: 'file', name: 'untitled.txt' })
-              setTimeout(() => newItemInputRef.current?.select(), 50)
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-slate-700 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors font-semibold"
-            title="New File (Cmd+N)"
-          >
-            <FilePlus className="w-3.5 h-3.5 text-sky-500" />
-            <span>New File</span>
-          </button>
+            <button
+              onClick={() => {
+                setNewItemDialog({ isOpen: true, type: 'file', name: 'untitled.txt' })
+                setTimeout(() => newItemInputRef.current?.select(), 50)
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-slate-700 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors font-semibold"
+              title="New File (Ctrl+N / ⌘N)"
+            >
+              <FilePlus className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
+              <span className="hidden sm:inline">New File</span>
+            </button>
+          </div>
 
-          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1" />
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1 flex-shrink-0" />
 
-          {/* ACTION: AI Smart Folder Reorganizer */}
-          <button
-            onClick={handleOpenReorganizeModal}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 text-indigo-700 dark:text-indigo-200 hover:text-indigo-900 dark:hover:text-white hover:from-indigo-500/30 hover:to-purple-500/30 transition-all font-semibold border border-indigo-400/40 shadow-sm"
-            title="AI Smart Reorganize: Automatically group files into intelligent semantic folders"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-pulse" />
-            <span>AI Smart Organize</span>
-          </button>
+          {/* GROUP 2: Windows 11 Action Ribbon (Cut, Copy, Paste, Rename, Delete, Undo) */}
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={handleCut}
+              disabled={currentPaneState.selectedPaths.size === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Cut selected items (Ctrl+X / ⌘X)"
+            >
+              <Scissors className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden xl:inline">Cut</span>
+            </button>
 
-          {/* NEW ACTION: Clean Temp Junk & Reclaim Space */}
-          <button
-            onClick={handleOpenCleanerModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 transition-all font-semibold border border-emerald-500/30"
-            title="Scan & delete .DS_Store, logs, caches, and build artifacts to reclaim disk space"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-            <span>Clean Junk</span>
-          </button>
+            <button
+              onClick={handleCopy}
+              disabled={currentPaneState.selectedPaths.size === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Copy selected items (Ctrl+C / ⌘C)"
+            >
+              <Copy className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden xl:inline">Copy</span>
+            </button>
 
-          {/* BIG FEATURE 1: App Uninstaller & Deep Cleaner */}
-          <button
-            onClick={handleOpenUninstallerModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25 transition-all font-semibold border border-rose-500/30"
-            title="App Uninstaller: Thoroughly remove applications and eradicate leftover library caches and preferences"
-          >
-            <PackageX className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
-            <span>App Uninstaller</span>
-          </button>
+            <button
+              onClick={handlePaste}
+              disabled={!clipboard.items || clipboard.items.length === 0}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors font-medium ${
+                clipboard.items && clipboard.items.length > 0
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+              title={`Paste items into current folder (Ctrl+V / ⌘V)${clipboard.items?.length ? ` - ${clipboard.items.length} item(s) staged` : ''}`}
+            >
+              <ClipboardPaste className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden xl:inline">Paste</span>
+              {clipboard.items && clipboard.items.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px] font-bold">
+                  {clipboard.items.length}
+                </span>
+              )}
+            </button>
 
-          {/* BIG FEATURE 2: Performance Enhancer & System Optimizer */}
-          <button
-            onClick={handleOpenPerfModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 transition-all font-semibold border border-amber-500/30"
-            title="Performance Enhancer: Live CPU/RAM monitors, process manager, memory purge, and DNS cache flush"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 animate-pulse" />
-            <span>Performance Boost</span>
-          </button>
+            <button
+              onClick={() => {
+                const selected = Array.from(currentPaneState.selectedPaths)
+                if (selected.length === 1) {
+                  const item = currentPaneState.items.find((i) => i.path === selected[0])
+                  if (item) startInlineRename(item)
+                }
+              }}
+              disabled={currentPaneState.selectedPaths.size !== 1}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Rename selected item (F2)"
+            >
+              <Edit3 className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden xl:inline">Rename</span>
+            </button>
 
-          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1" />
+            <button
+              onClick={handleDeleteToTrash}
+              disabled={currentPaneState.selectedPaths.size === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 hover:bg-rose-500/10 transition-colors font-medium"
+              title="Move to Trash / Recycle Bin (Delete / ⌘⌫)"
+            >
+              <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden xl:inline">Delete</span>
+            </button>
 
-          {/* Windows 11 Explorer Command Ribbon */}
-          <button
-            onClick={handleCut}
-            disabled={currentPaneState.selectedPaths.size === 0}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title="Cut selected items (Ctrl+X / ⌘X)"
-          >
-            <Scissors className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Cut</span>
-          </button>
-          <button
-            onClick={handleCopy}
-            disabled={currentPaneState.selectedPaths.size === 0}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title="Copy selected items (Ctrl+C / ⌘C)"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Copy</span>
-          </button>
-          <button
-            onClick={handlePaste}
-            disabled={!clipboard.items || clipboard.items.length === 0}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors text-xs font-medium ${
-              clipboard.items && clipboard.items.length > 0
-                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10'
-            }`}
-            title={`Paste items into current folder (Ctrl+V / ⌘V)${clipboard.items?.length ? ` - ${clipboard.items.length} item(s) staged` : ''}`}
-          >
-            <ClipboardPaste className="w-3.5 h-3.5" />
-            <span>Paste</span>
-            {clipboard.items && clipboard.items.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px] font-bold">
-                {clipboard.items.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => {
-              const selected = Array.from(currentPaneState.selectedPaths)
-              if (selected.length === 1) {
-                const item = currentPaneState.items.find((i) => i.path === selected[0])
-                if (item) startInlineRename(item)
-              }
-            }}
-            disabled={currentPaneState.selectedPaths.size !== 1}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title="Rename selected item (F2)"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Rename</span>
-          </button>
+            <button
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title={`Undo last file action (Ctrl+Z / ⌘Z)${undoStack.length ? ` - ${undoStack.length} action(s) available` : ''}`}
+            >
+              <RotateCcw className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="hidden 2xl:inline">Undo</span>
+              {undoStack.length > 0 && (
+                <span className="px-1 py-0.2 rounded-full bg-slate-300 dark:bg-white/20 text-[9px] font-bold">
+                  {undoStack.length}
+                </span>
+              )}
+            </button>
+          </div>
 
-          {/* Delete to Trash */}
-          <button
-            onClick={handleDeleteToTrash}
-            disabled={currentPaneState.selectedPaths.size === 0}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-30 hover:bg-rose-500/10 transition-colors text-xs font-medium"
-            title="Move to Trash / Recycle Bin (Delete / ⌘⌫)"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Delete</span>
-          </button>
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1 flex-shrink-0" />
 
-          {/* Undo Button */}
-          <button
-            onClick={handleUndo}
-            disabled={undoStack.length === 0}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title={`Undo last file action (Ctrl+Z / ⌘Z)${undoStack.length ? ` - ${undoStack.length} action(s) available` : ''}`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Undo</span>
-            {undoStack.length > 0 && (
-              <span className="px-1 py-0.2 rounded-full bg-slate-300 dark:bg-white/20 text-[9px] font-bold">
-                {undoStack.length}
-              </span>
-            )}
-          </button>
+          {/* GROUP 3: Media & Batch Tools Hub */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const selected = Array.from(currentPaneState.selectedPaths)
+                let itemToOpen = null
+                if (selected.length === 1) {
+                  const found = currentPaneState.items.find((i) => i.path === selected[0])
+                  if (found && isImageFile(found)) itemToOpen = found
+                }
+                openPhotoGallery(itemToOpen)
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all font-semibold"
+              title="Inbuilt Photo Gallery (Browse all photos with Next / Prev, Zoom, Slideshow)"
+            >
+              <Images className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+              <span className="hidden sm:inline">Photo Gallery</span>
+              {currentPaneState.items.filter(isImageFile).length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                  {currentPaneState.items.filter(isImageFile).length}
+                </span>
+              )}
+            </button>
 
-          {/* Batch Power Renamer Trigger */}
-          <button
-            onClick={() => setBatchRenameModal((prev) => ({ ...prev, isOpen: true }))}
-            disabled={currentPaneState.selectedPaths.size === 0}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title="Batch Power Renamer (Cmd+Shift+R)"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-            <span className="hidden sm:inline">Batch Rename</span>
-          </button>
+            <button
+              onClick={() => setBatchRenameModal((prev) => ({ ...prev, isOpen: true }))}
+              disabled={currentPaneState.selectedPaths.size === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Batch Power Renamer (Cmd+Shift+R)"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
+              <span className="hidden lg:inline">Batch Rename</span>
+            </button>
+          </div>
 
-          {/* Inbuilt Photo Gallery Trigger */}
-          <button
-            onClick={() => {
-              const selected = Array.from(currentPaneState.selectedPaths)
-              let itemToOpen = null
-              if (selected.length === 1) {
-                const found = currentPaneState.items.find((i) => i.path === selected[0])
-                if (found && isImageFile(found)) itemToOpen = found
-              }
-              openPhotoGallery(itemToOpen)
-            }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all text-xs font-semibold"
-            title="Open Inbuilt Photo Gallery (Browse all photos with Next / Prev, Zoom, Slideshow)"
-          >
-            <Images className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span className="hidden sm:inline">Photo Gallery</span>
-            {currentPaneState.items.filter(isImageFile).length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
-                {currentPaneState.items.filter(isImageFile).length}
-              </span>
-            )}
-          </button>
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1 flex-shrink-0" />
 
-          {/* New Folder */}
-          <button
-            onClick={() => {
-              setNewItemDialog({ isOpen: true, type: 'folder', name: 'New Folder' })
-              setTimeout(() => newItemInputRef.current?.select(), 50)
-            }}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-xs font-medium"
-            title="New Folder (Ctrl+Shift+N / ⌘Shift+N)"
-          >
-            <FolderPlus className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden lg:inline">New Folder</span>
-          </button>
+          {/* GROUP 4: AI & System Intelligence Hub */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleOpenReorganizeModal}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 text-indigo-700 dark:text-indigo-200 hover:text-indigo-900 dark:hover:text-white hover:from-indigo-500/30 hover:to-purple-500/30 transition-all font-semibold border border-indigo-400/40 shadow-sm"
+              title="AI Smart Reorganize: Automatically group files into intelligent semantic folders"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-pulse flex-shrink-0" />
+              <span className="hidden sm:inline">AI Organize</span>
+            </button>
 
-          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1" />
+            {/* Responsive System & Storage Tools Dropdown */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSystemMenuOpen((prev) => !prev)
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all font-semibold border ${
+                  systemMenuOpen
+                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                }`}
+                title="System & Storage Tools: Clean Junk, App Uninstaller, Performance Enhancer"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 flex-shrink-0" />
+                <span className="hidden sm:inline">System Tools</span>
+                <ChevronDown className={`w-3 h-3 opacity-60 transition-transform ${systemMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-          {/* Developer Quick-Launch */}
-          <button
-            onClick={handleOpenTerminal}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
-            title="Open in macOS Terminal"
-          >
-            <Terminal className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-            <span className="hidden sm:inline">Terminal</span>
-          </button>
-          <button
-            onClick={handleOpenVSCode}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
-            title="Open in Visual Studio Code"
-          >
-            <Code2 className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
-            <span className="hidden sm:inline">VS Code</span>
-          </button>
+              {systemMenuOpen && (
+                <div
+                  className="absolute left-0 mt-1.5 w-64 rounded-xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#0f131d]/95 backdrop-blur-xl shadow-2xl p-1.5 text-xs text-slate-800 dark:text-slate-200 flex flex-col gap-0.5 z-50 select-none animate-in fade-in zoom-in-95 duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Storage & Maintenance
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      handleOpenCleanerModal()
+                      setSystemMenuOpen(false)
+                    }}
+                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors text-left"
+                  >
+                    <div className="p-1.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">Clean Temp Junk</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Purge .DS_Store, build logs & caches</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleOpenUninstallerModal()
+                      setSystemMenuOpen(false)
+                    }}
+                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-rose-500/15 hover:text-rose-700 dark:hover:text-rose-300 transition-colors text-left"
+                  >
+                    <div className="p-1.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                      <PackageX className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">App Uninstaller</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Deep remove apps & residual plists</div>
+                    </div>
+                  </button>
+
+                  <div className="h-[1px] bg-slate-200 dark:bg-white/10 my-1" />
+
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    macOS System Health
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      handleOpenPerfModal()
+                      setSystemMenuOpen(false)
+                    }}
+                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-amber-500/15 hover:text-amber-700 dark:hover:text-amber-300 transition-colors text-left"
+                  >
+                    <div className="p-1.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                      <Zap className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">Performance Boost</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Purge inactive RAM & flush DNS cache</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1 flex-shrink-0" />
+
+          {/* GROUP 5: Developer Quick-Launch Hub */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleOpenTerminal}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Open current folder in macOS Terminal"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+              <span className="hidden lg:inline">Terminal</span>
+            </button>
+            <button
+              onClick={handleOpenVSCode}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors font-medium"
+              title="Open current folder in Visual Studio Code"
+            >
+              <Code2 className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 flex-shrink-0" />
+              <span className="hidden lg:inline">VS Code</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'details' }))}
-            className={`p-1.5 rounded-md transition-colors ${
-              currentPaneState.viewMode === 'details'
-                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/40 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
-            }`}
-            title="Details Table View (Cmd+1)"
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'grid' }))}
-            className={`p-1.5 rounded-md transition-colors ${
-              currentPaneState.viewMode === 'grid'
-                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/40 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
-            }`}
-            title="Grid Card View (Cmd+2)"
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-          </button>
+        {/* GROUP 6: View Modes & Layout Controls (Right Side) */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center bg-slate-200/60 dark:bg-white/5 rounded-lg p-0.5 border border-slate-300 dark:border-white/10">
+            <button
+              onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'details' }))}
+              className={`p-1.5 rounded-md transition-colors ${
+                currentPaneState.viewMode === 'details'
+                  ? 'bg-white dark:bg-white/15 text-indigo-700 dark:text-white font-bold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Details Table View (Cmd+1)"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'grid' }))}
+              className={`p-1.5 rounded-md transition-colors ${
+                currentPaneState.viewMode === 'grid'
+                  ? 'bg-white dark:bg-white/15 text-indigo-700 dark:text-white font-bold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Grid Card View (Cmd+2)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
-          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-1" />
+          <div className="h-4 w-[1px] bg-slate-300 dark:bg-white/10 mx-0.5" />
 
           <button
             onClick={() => setIsDualPane((prev) => !prev)}
-            className={`p-1.5 rounded-md transition-colors ${
-              isDualPane ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/40 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
+            className={`p-1.5 rounded-md transition-colors border ${
+              isDualPane
+                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border-indigo-200 dark:border-indigo-500/40 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 border-transparent'
             }`}
             title="Toggle Dual-Pane Split View (Cmd+\)"
           >
@@ -4257,10 +4320,12 @@ export default function App() {
 
           <button
             onClick={() => setShowInspector((prev) => !prev)}
-            className={`p-1.5 rounded-md transition-colors ${
-              showInspector ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/40 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
+            className={`p-1.5 rounded-md transition-colors border ${
+              showInspector
+                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold border-indigo-200 dark:border-indigo-500/40 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 border-transparent'
             }`}
-            title="Toggle Inspector Preview (Cmd+I or Space)"
+            title="Toggle Inspector Preview Pane (Cmd+I or Space)"
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
