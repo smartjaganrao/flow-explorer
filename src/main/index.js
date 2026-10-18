@@ -130,6 +130,11 @@ function setupAppMenu() {
           click: () => mainWindow?.webContents.send('app:shortcut', 'view-grid')
         },
         {
+          label: 'Toggle Mind Map View',
+          accelerator: 'CmdOrCtrl+3',
+          click: () => mainWindow?.webContents.send('app:shortcut', 'view-graph')
+        },
+        {
           label: 'Toggle Dual Pane',
           accelerator: 'CmdOrCtrl+\\',
           click: () => mainWindow?.webContents.send('app:shortcut', 'toggle-dual')
@@ -223,8 +228,12 @@ function createWindow() {
       mainWindow.webContents.send('app:shortcut', 'refresh')
     } else if (input.key === 'Delete') {
       mainWindow.webContents.send('app:shortcut', input.shift ? 'delete-permanent' : 'delete')
-    } else if (isCtrlOrCmd && key === 'd') {
-      mainWindow.webContents.send('app:shortcut', 'delete')
+    } else if (isCtrlOrCmd && key === '1') {
+      mainWindow.webContents.send('app:shortcut', 'view-details')
+    } else if (isCtrlOrCmd && key === '2') {
+      mainWindow.webContents.send('app:shortcut', 'view-grid')
+    } else if (isCtrlOrCmd && key === '3') {
+      mainWindow.webContents.send('app:shortcut', 'view-graph')
     } else if (input.key === 'F12' || (isCtrlOrCmd && input.shift && key === 'i') || (isCtrlOrCmd && input.alt && key === 'i')) {
       mainWindow.webContents.toggleDevTools()
     }

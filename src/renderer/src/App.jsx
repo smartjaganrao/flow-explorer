@@ -8,7 +8,7 @@ import {
   FilePlus, Edit3, HardDrive, Home, Download, FileSpreadsheet,
   Layers, ArrowRight, Star, Tag, GitBranch, Hash, Play, Pause,
   Volume2, SlidersHorizontal, ArrowUpDown, ShieldCheck,
-  Maximize2, Minimize2, TerminalSquare, Info, Share2, Music, Video,
+  Maximize2, Minimize2, TerminalSquare, Info, Share2, Music, Video, Network,
   ChevronDown, CheckSquare, Clock, FolderTree, Cpu, CheckCircle2,
   Filter, Boxes, AlertTriangle, Zap, Activity, Rocket, Gauge,
   AppWindow, PackageX, HelpCircle, RotateCcw,
@@ -896,6 +896,521 @@ function MyComputerScreen({ volumes, diskStats, diskBreakdown, onNavigate, onOpe
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ==========================================
+// 17. MIND MAP / GRAPH VIEW COMPONENT (Folders Flow Spatial Architecture)
+// ==========================================
+function MindMapGraphView({
+  paneName,
+  currentPath,
+  items,
+  filterQuery = '',
+  selectedPaths = new Set(),
+  onItemSelect,
+  onOpenItem,
+  onNavigate,
+  onContextMenu,
+  fileTags = {},
+  theme = 'dark',
+  addToast
+}) {
+  const containerRef = useRef(null)
+  const [pan, setPan] = useState({ x: 60, y: 120 })
+  const [zoom, setZoom] = useState(1)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [filterPreset, setFilterPreset] = useState('all')
+  const [expandedBranches, setExpandedBranches] = useState({})
+
+  // Extract root folder name
+  const rootFolderName = useMemo(() => {
+    if (!currentPath) return 'Root'
+    const parts = currentPath.split('/').filter(Boolean)
+    return parts.length > 0 ? parts[parts.length - 1] : '/'
+  }, [currentPath])
+
+  // Filter items by preset
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      if (filterPreset === 'folders') return item.isDirectory
+      if (filterPreset === 'media') {
+        const ext = (item.extension || '').toLowerCase()
+        return ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.mp4', '.mov', '.mkv', '.mp3', '.wav', '.flac', '.m4a'].includes(ext)
+      }
+      if (filterPreset === 'code') {
+        const ext = (item.extension || '').toLowerCase()
+        return ['.js', '.jsx', '.ts', '.tsx', '.py', '.html', '.css', '.json', '.md', '.sh', '.go', '.rs', '.c', '.cpp', '.sql', '.yaml', '.yml'].includes(ext)
+      }
+      if (filterPreset === 'large') {
+        return !item.isDirectory && item.size > 10 * 1024 * 1024
+      }
+      return true
+    }).sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1
+      if (!a.isDirectory && b.isDirectory) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [items, filterPreset])
+
+  // Check matching status for in-situ visual search glow
+  const isSearchActive = Boolean(filterQuery && filterQuery.trim().length > 0)
+  const searchQuery = filterQuery.trim().toLowerCase()
+
+  const matchMap = useMemo(() => {
+    const map = new Map()
+    filteredItems.forEach((item) => {
+      const isMatch = isSearchActive && item.name.toLowerCase().includes(searchQuery)
+      map.set(item.path, isMatch)
+    })
+    return map
+  }, [filteredItems, isSearchActive, searchQuery])
+
+  const totalMatches = useMemo(() => {
+    if (!isSearchActive) return 0
+    let count = 0
+    for (const val of matchMap.values()) {
+      if (val) count++
+    }
+    return count
+  }, [matchMap, isSearchActive])
+
+  // Expand / collapse folder sub-branch
+  const toggleFolderExpand = useCallback(async (folderItem, e) => {
+    e.stopPropagation()
+    const folderPath = folderItem.path
+    if (expandedBranches[folderPath]) {
+      setExpandedBranches((prev) => {
+        const next = { ...prev }
+        delete next[folderPath]
+        return next
+      })
+    } else {
+      setExpandedBranches((prev) => ({
+        ...prev,
+        [folderPath]: { items: [], loading: true }
+      }))
+      try {
+        const res = await api.readDir(folderPath, { showHidden: false })
+        if (res.success) {
+          setExpandedBranches((prev) => ({
+            ...prev,
+            [folderPath]: { items: res.items || [], loading: false }
+          }))
+        } else {
+          setExpandedBranches((prev) => {
+            const next = { ...prev }
+            delete next[folderPath]
+            return next
+          })
+          if (addToast) addToast(`Cannot open folder: ${res.error}`, 'error')
+        }
+      } catch (err) {
+        setExpandedBranches((prev) => {
+          const next = { ...prev }
+          delete next[folderPath]
+          return next
+        })
+      }
+    }
+  }, [expandedBranches, addToast])
+
+  // Pan & Drag handlers
+  const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0) return
+    setIsDragging(true)
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+  }, [pan])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return
+    setPan({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    })
+  }, [isDragging, dragStart])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Zoom handlers
+  const handleWheel = useCallback((e) => {
+    e.preventDefault()
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92
+    setZoom((prev) => Math.min(2.2, Math.max(0.4, Number((prev * zoomFactor).toFixed(2)))))
+  }, [])
+
+  // Center Root view
+  const handleCenterView = useCallback(() => {
+    setPan({ x: 80, y: 140 })
+    setZoom(1)
+  }, [])
+
+  // Expand all folders on canvas
+  const handleExpandAll = useCallback(async () => {
+    const folders = filteredItems.filter((i) => i.isDirectory)
+    if (folders.length === 0) return
+    const newExpanded = {}
+    for (const f of folders.slice(0, 8)) {
+      try {
+        const res = await api.readDir(f.path, { showHidden: false })
+        if (res.success) {
+          newExpanded[f.path] = { items: res.items || [], loading: false }
+        }
+      } catch {}
+    }
+    setExpandedBranches(newExpanded)
+    if (addToast) addToast(`Expanded ${Object.keys(newExpanded).length} sub-branches`, 'info')
+  }, [filteredItems, addToast])
+
+  const handleCollapseAll = useCallback(() => {
+    setExpandedBranches({})
+    if (addToast) addToast('Collapsed all branches', 'info')
+  }, [addToast])
+
+  // Node layout coordinates
+  const rootNode = {
+    x: 40,
+    y: Math.max(160, (filteredItems.length * 60) / 2),
+    width: 220,
+    height: 64
+  }
+
+  const column1X = rootNode.x + rootNode.width + 120
+  const nodeWidth = 230
+  const nodeHeight = 48
+  const nodeGap = 12
+
+  // Build node geometry and SVG links
+  const { nodes, links } = useMemo(() => {
+    const nodeList = []
+    const linkList = []
+
+    let currentY = 40
+
+    filteredItems.forEach((item) => {
+      const itemY = currentY
+      const isMatch = matchMap.get(item.path)
+      const isSelected = selectedPaths.has(item.path)
+      const isExpanded = Boolean(expandedBranches[item.path])
+
+      const nodeObj = {
+        item,
+        x: column1X,
+        y: itemY,
+        width: nodeWidth,
+        height: nodeHeight,
+        isMatch,
+        isSelected,
+        isExpanded,
+        level: 1
+      }
+      nodeList.push(nodeObj)
+
+      // Link from root to item
+      linkList.push({
+        id: `root-${item.path}`,
+        from: { x: rootNode.x + rootNode.width, y: rootNode.y + rootNode.height / 2 },
+        to: { x: column1X, y: itemY + nodeHeight / 2 },
+        isMatch
+      })
+
+      // Level 2 children if expanded
+      const branch = expandedBranches[item.path]
+      if (branch && branch.items && branch.items.length > 0) {
+        const childColumnX = column1X + nodeWidth + 120
+        let childY = itemY - Math.min(150, (branch.items.length * 48) / 2) + 20
+        branch.items.slice(0, 15).forEach((childItem) => {
+          const childMatch = isSearchActive && childItem.name.toLowerCase().includes(searchQuery)
+          const childNode = {
+            item: childItem,
+            x: childColumnX,
+            y: childY,
+            width: 210,
+            height: 44,
+            isMatch: childMatch,
+            isSelected: selectedPaths.has(childItem.path),
+            isExpanded: false,
+            level: 2,
+            parentPath: item.path
+          }
+          nodeList.push(childNode)
+
+          linkList.push({
+            id: `${item.path}-${childItem.path}`,
+            from: { x: column1X + nodeWidth, y: itemY + nodeHeight / 2 },
+            to: { x: childColumnX, y: childY + 22 },
+            isMatch: childMatch
+          })
+
+          childY += 44 + 8
+        })
+
+        currentY = Math.max(currentY + nodeHeight + nodeGap, childY + 10)
+      } else {
+        currentY += nodeHeight + nodeGap
+      }
+    })
+
+    return { nodes: nodeList, links: linkList }
+  }, [filteredItems, matchMap, expandedBranches, selectedPaths, rootNode, column1X, nodeWidth, nodeHeight, nodeGap, isSearchActive, searchQuery])
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
+      className={`relative w-full h-full overflow-hidden select-none cursor-grab active:cursor-grabbing ${
+        theme === 'dark' ? 'bg-[#0a0d14]' : 'bg-slate-50'
+      }`}
+      style={{
+        backgroundImage: theme === 'dark'
+          ? 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0)'
+          : 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0)',
+        backgroundSize: '24px 24px'
+      }}
+    >
+      {/* 1. FLOATING CONTROL HUD BAR (Folders Flow Design) */}
+      <div
+        className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none"
+      >
+        {/* Left: Folder Name & Stats */}
+        <div className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200 dark:border-white/10 shadow-lg text-xs font-semibold">
+          <FolderTree className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+          <span className="text-slate-800 dark:text-slate-200 font-bold truncate max-w-[180px]">
+            {rootFolderName}
+          </span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+            {filteredItems.length} nodes
+          </span>
+          {isSearchActive && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30 animate-pulse">
+              <Sparkles className="w-3 h-3" />
+              {totalMatches} glowing
+            </span>
+          )}
+        </div>
+
+        {/* Center: Filter Presets (Folders Flow 1-click filter style) */}
+        <div className="pointer-events-auto hidden md:flex items-center gap-1 p-1 rounded-xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200 dark:border-white/10 shadow-lg">
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'folders', label: 'Folders Only' },
+            { id: 'media', label: 'Media' },
+            { id: 'code', label: 'Code' },
+            { id: 'large', label: '>10 MB' }
+          ].map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => setFilterPreset(preset.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                filterPreset === preset.id
+                  ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: Zoom & Layout Tools */}
+        <div className="pointer-events-auto flex items-center gap-1.5 p-1 rounded-xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200 dark:border-white/10 shadow-lg text-slate-700 dark:text-slate-300">
+          <button
+            onClick={Object.keys(expandedBranches).length > 0 ? handleCollapseAll : handleExpandAll}
+            className="px-2 py-1 rounded-lg text-xs font-semibold hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            title={Object.keys(expandedBranches).length > 0 ? 'Collapse all branches' : 'Expand all branches'}
+          >
+            {Object.keys(expandedBranches).length > 0 ? 'Collapse' : 'Expand All'}
+          </button>
+          <div className="h-4 w-px bg-slate-300 dark:bg-white/10" />
+          <button
+            onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))}
+            className="p-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            title="Zoom Out (-)"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleCenterView}
+            className="px-2 py-0.5 rounded-md text-xs font-mono font-bold hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            title="Reset Zoom & Center (100%)"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.min(2.2, Number((z + 0.15).toFixed(2))))}
+            className="p-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            title="Zoom In (+)"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleCenterView}
+            className="p-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+            title="Center Canvas View"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 2. TRANSFORMABLE INTERACTIVE CANVAS */}
+      <div
+        className="absolute inset-0 origin-top-left transition-transform duration-75"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
+        }}
+      >
+        {/* SVG BEZIER CONNECTOR LINES */}
+        <svg
+          className="absolute inset-0 overflow-visible pointer-events-none"
+          style={{ width: '4000px', height: '4000px' }}
+        >
+          <defs>
+            <linearGradient id="flow-gradient-active" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#818cf8" />
+            </linearGradient>
+            <linearGradient id="flow-gradient-passive" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={theme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(100,116,139,0.22)'} />
+              <stop offset="100%" stopColor={theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(100,116,139,0.12)'} />
+            </linearGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {links.map((link) => {
+            const dx = Math.abs(link.to.x - link.from.x) * 0.5
+            const cp1X = link.from.x + dx
+            const cp1Y = link.from.y
+            const cp2X = link.to.x - dx
+            const cp2Y = link.to.y
+            const pathData = `M ${link.from.x} ${link.from.y} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${link.to.x} ${link.to.y}`
+
+            return (
+              <path
+                key={link.id}
+                d={pathData}
+                fill="none"
+                stroke={link.isMatch ? 'url(#flow-gradient-active)' : 'url(#flow-gradient-passive)'}
+                strokeWidth={link.isMatch ? '2.5' : '1.5'}
+                filter={link.isMatch ? 'url(#glow)' : undefined}
+                strokeDasharray={link.isMatch ? '6 3' : undefined}
+                className={link.isMatch ? 'animate-pulse' : undefined}
+              />
+            )
+          })}
+        </svg>
+
+        {/* ROOT NODE (Central Explorer Hub) */}
+        <div
+          style={{
+            transform: `translate3d(${rootNode.x}px, ${rootNode.y}px, 0)`,
+            width: `${rootNode.width}px`
+          }}
+          className="absolute rounded-2xl p-3.5 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-2xl border border-white/25 flex items-center gap-3 select-none z-20 group hover:scale-105 transition-transform"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+            <Folder className="w-5 h-5 text-amber-300" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Current Root</span>
+            <span className="font-extrabold text-sm truncate leading-tight">{rootFolderName}</span>
+            <span className="text-[10px] text-indigo-200/90 font-mono">{filteredItems.length} items</span>
+          </div>
+        </div>
+
+        {/* BRANCH NODES (Files & Subfolders) */}
+        {nodes.map((node) => {
+          const { item, x, y, width, height, isMatch, isSelected, isExpanded } = node
+          const tagColor = fileTags[item.path]
+
+          return (
+            <div
+              key={item.path}
+              id={`graph-node-${item.path}`}
+              style={{
+                transform: `translate3d(${x}px, ${y}px, 0)`,
+                width: `${width}px`,
+                height: `${height}px`
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onItemSelect(item, e, paneName)
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                if (item.isDirectory) {
+                  onNavigate(item.path)
+                } else {
+                  onOpenItem(item)
+                }
+              }}
+              onContextMenu={(e) => {
+                e.stopPropagation()
+                onContextMenu(e, item, paneName)
+              }}
+              className={`absolute rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 border transition-all duration-150 cursor-pointer group ${
+                isSelected
+                  ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/30 scale-102 z-20'
+                  : isMatch
+                    ? 'bg-cyan-50 dark:bg-cyan-950/80 text-cyan-950 dark:text-cyan-100 border-cyan-400 dark:border-cyan-400 shadow-[0_0_24px_rgba(6,182,212,0.6)] ring-2 ring-cyan-400 scale-105 z-20'
+                    : isSearchActive
+                      ? 'opacity-35 hover:opacity-100 bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:shadow-md'
+                      : 'bg-white/80 dark:bg-slate-900/80 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-lg shadow-xs'
+              }`}
+            >
+              {/* Left: Icon & Name */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="shrink-0">
+                  <FileThumbnail item={item} mode="details" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold truncate leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                    {item.name}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                    {item.isDirectory ? 'Directory' : formatBytes(item.size)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Tag Dot & Expand button */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {tagColor && (
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: COLOR_TAGS.find((c) => c.name === tagColor)?.hex || tagColor }}
+                  />
+                )}
+
+                {item.isDirectory && (
+                  <button
+                    onClick={(e) => toggleFolderExpand(item, e)}
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                      isExpanded
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-white/10 hover:bg-indigo-500 hover:text-white text-slate-600 dark:text-slate-300'
+                    }`}
+                    title={isExpanded ? 'Collapse branch' : 'Expand subfolder branch'}
+                  >
+                    {isExpanded ? '−' : '+'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -3115,6 +3630,8 @@ export default function App() {
         updateViewMode('details')
       } else if (action === 'view-grid') {
         updateViewMode('grid')
+      } else if (action === 'view-graph') {
+        updateViewMode('graph')
       } else if (action === 'toggle-dual') {
         setIsDualPane((p) => !p)
       } else if (action === 'enter-fullscreen') {
@@ -3418,6 +3935,11 @@ export default function App() {
         updateViewMode('grid')
         return
       }
+      if (isCtrlOrCmd && e.key === '3') {
+        e.preventDefault()
+        updateViewMode('graph')
+        return
+      }
 
       // 19. COMMAND PALETTE (Ctrl+K)
       if (isCtrlOrCmd && (key === 'k' || code === 'KeyK')) {
@@ -3552,6 +4074,7 @@ export default function App() {
       { id: 'copy-path', label: 'Copy Current Directory Path', icon: Copy, action: () => copyPathToClipboard() },
       { id: 'view-details', label: 'Switch to Details Table View', shortcut: 'Cmd+1', icon: List, action: () => updateViewMode('details') },
       { id: 'view-grid', label: 'Switch to Grid Card View', shortcut: 'Cmd+2', icon: LayoutGrid, action: () => updateViewMode('grid') },
+      { id: 'view-graph', label: 'Switch to Mind Map Graph View', shortcut: 'Cmd+3', icon: Network, action: () => updateViewMode('graph') },
       { id: 'toggle-inspector', label: 'Toggle Inspector Preview Pane', shortcut: 'Cmd+I', icon: Sparkles, action: () => setShowInspector((prev) => !prev) }
     ]
     if (!commandQuery.trim()) return list
@@ -3865,7 +4388,7 @@ export default function App() {
           }}
           onContextMenu={(e) => handleContextMenu(e, null, paneName)}
         >
-          {items.length === 0 ? (
+          {items.length === 0 && pane.viewMode !== 'graph' ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
               <Folder className="w-12 h-12 text-slate-400 dark:text-slate-600 stroke-[1.2]" />
               <p className="text-sm font-medium">This folder is empty</p>
@@ -4084,7 +4607,7 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : pane.viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
               {items.map((item) => {
                 const isSelected = pane.selectedPaths.has(item.path)
@@ -4145,6 +4668,21 @@ export default function App() {
                 )
               })}
             </div>
+          ) : (
+            <MindMapGraphView
+              paneName={paneName}
+              currentPath={pane.path}
+              items={items}
+              filterQuery={pane.filterQuery}
+              selectedPaths={pane.selectedPaths}
+              onItemSelect={handleItemSelect}
+              onOpenItem={handleOpenItem}
+              onNavigate={navigateTo}
+              onContextMenu={handleContextMenu}
+              fileTags={fileTags}
+              theme={theme}
+              addToast={addToast}
+            />
           )}
         </div>
 
@@ -4605,6 +5143,17 @@ export default function App() {
               title="Grid Card View (Cmd+2)"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => updateViewMode('graph')}
+              className={`p-1.5 rounded-md transition-colors ${
+                currentPaneState.viewMode === 'graph'
+                  ? 'bg-white dark:bg-white/15 text-indigo-700 dark:text-white font-bold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Mind Map Graph View (Cmd+3)"
+            >
+              <Network className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -8218,6 +8767,15 @@ export default function App() {
                       >
                         <LayoutGrid className="w-3.5 h-3.5" />
                         <span>Grid Cards</span>
+                      </button>
+                      <button
+                        onClick={() => updateViewMode('graph')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          currentPaneState.viewMode === 'graph' ? 'bg-white dark:bg-white/15 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <Network className="w-3.5 h-3.5" />
+                        <span>Mind Map Graph</span>
                       </button>
                     </div>
                   </div>
