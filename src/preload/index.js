@@ -59,7 +59,11 @@ const explorerAPI = {
   },
   setDefaultFileManager: () => ipcRenderer.invoke('fs:set-default-file-manager'),
   getLoginItemSettings: () => ipcRenderer.invoke('fs:get-login-item-settings'),
-  setLoginItemSettings: (settings) => ipcRenderer.invoke('fs:set-login-item-settings', settings)
+  setLoginItemSettings: (settings) => ipcRenderer.invoke('fs:set-login-item-settings', settings),
+  // Window Controls
+  toggleFullScreen: () => ipcRenderer.invoke('window:toggle-fullscreen'),
+  isFullScreen: () => ipcRenderer.invoke('window:is-fullscreen'),
+  toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize')
 }
 
 if (process.contextIsolated) {

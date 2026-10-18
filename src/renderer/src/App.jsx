@@ -8,7 +8,7 @@ import {
   FilePlus, Edit3, HardDrive, Home, Download, FileSpreadsheet,
   Layers, ArrowRight, Star, Tag, GitBranch, Hash, Play, Pause,
   Volume2, SlidersHorizontal, ArrowUpDown, ShieldCheck,
-  Maximize2, TerminalSquare, Info, Share2, Music, Video,
+  Maximize2, Minimize2, TerminalSquare, Info, Share2, Music, Video,
   ChevronDown, CheckSquare, Clock, FolderTree, Cpu, CheckCircle2,
   Filter, Boxes, AlertTriangle, Zap, Activity, Rocket, Gauge,
   AppWindow, PackageX, HelpCircle, RotateCcw,
@@ -312,7 +312,10 @@ const createMockAPI = () => {
     onOpenExternalPath: () => () => {},
     setDefaultFileManager: async () => ({ success: true, protocolRegistered: true }),
     getLoginItemSettings: async () => ({ success: true, settings: { openAtLogin: false } }),
-    setLoginItemSettings: async (s) => ({ success: true, settings: s })
+    setLoginItemSettings: async (s) => ({ success: true, settings: s }),
+    toggleFullScreen: async () => false,
+    isFullScreen: async () => false,
+    toggleMaximize: async () => false
   }
 }
 
@@ -1448,6 +1451,27 @@ export default function App() {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 3500)
+  }, [])
+
+  // Window Fullscreen State & Controller
+  const [isWindowFullScreen, setIsWindowFullScreen] = useState(false)
+
+  const handleToggleFullscreen = useCallback(async () => {
+    try {
+      if (api.toggleFullScreen) {
+        const isFS = await api.toggleFullScreen()
+        setIsWindowFullScreen(!!isFS)
+        addToast(isFS ? 'Entered Fullscreen Mode' : 'Exited Fullscreen Mode', 'info')
+      }
+    } catch (err) {
+      console.error('Fullscreen toggle error:', err)
+    }
+  }, [addToast])
+
+  useEffect(() => {
+    if (api.isFullScreen) {
+      api.isFullScreen().then((fs) => setIsWindowFullScreen(!!fs)).catch(() => {})
+    }
   }, [])
 
   const currentPaneState = activePane === 'left' ? leftPane : rightPane
@@ -3093,6 +3117,10 @@ export default function App() {
         updateViewMode('grid')
       } else if (action === 'toggle-dual') {
         setIsDualPane((p) => !p)
+      } else if (action === 'enter-fullscreen') {
+        setIsWindowFullScreen(true)
+      } else if (action === 'leave-fullscreen') {
+        setIsWindowFullScreen(false)
       }
     })
     return cleanup
@@ -3105,6 +3133,13 @@ export default function App() {
   // 2. Global Keyboard Shortcuts (Windows Explorer standard + Mac support)
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // F11 or Cmd+Ctrl+F for Fullscreen toggle
+      if (e.key === 'F11') {
+        e.preventDefault()
+        handleToggleFullscreen()
+        return
+      }
+
       const activeEl = document.activeElement
       const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')
 
@@ -4147,7 +4182,11 @@ export default function App() {
     <div className={`h-screen w-screen flex flex-col font-sans overflow-hidden relative select-none ${theme === 'dark' ? 'dark text-slate-100 mac-vibrancy-dark' : 'text-slate-900 mac-vibrancy-light'}`}>
       
       {/* 1. TOP APP BAR & MULTI-TABS (macOS Native Glass Window Header) */}
-      <div className="h-11 flex items-center justify-between pl-20 pr-3 border-b border-slate-200 dark:border-white/[0.08] mac-glass-header mac-specular select-none z-10 mac-drag-region">
+      <div
+        onDoubleClick={handleToggleFullscreen}
+        title="Double-click header to toggle Fullscreen Mode"
+        className="h-11 flex items-center justify-between pl-20 pr-3 border-b border-slate-200 dark:border-white/[0.08] mac-glass-header mac-specular select-none z-10 mac-drag-region cursor-default"
+      >
         
         {/* Product Brand Squircle Button */}
         <button
@@ -4164,7 +4203,12 @@ export default function App() {
           </span>
         </button>
 
-        <div className="mac-no-drag flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-4">
+        <div
+          onDoubleClick={(e) => {
+            if (e.target === e.currentTarget) handleToggleFullscreen()
+          }}
+          className="mac-no-drag flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-4"
+        >
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId
             return (
@@ -4216,6 +4260,19 @@ export default function App() {
             <TerminalSquare className="w-4 h-4" />
           </button>
 
+          {/* Fullscreen Toggle Button */}
+          <button
+            onClick={handleToggleFullscreen}
+            className={`p-1.5 rounded-lg transition-colors ${
+              isWindowFullScreen
+                ? 'bg-blue-500/20 text-blue-500 dark:text-blue-400'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+            }`}
+            title={`Toggle Fullscreen Mode (Double-click titlebar or F11) ${isWindowFullScreen ? '(Exit Fullscreen)' : '(Enter Fullscreen)'}`}
+          >
+            {isWindowFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+
           <button
             onClick={() => setShowDefaultManagerModal(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all font-semibold"
@@ -4245,7 +4302,12 @@ export default function App() {
       </div>
 
       {/* 2. POWER-USER ACTION RIBBON */}
-      <div className="h-10 flex items-center justify-between px-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#0f131d] text-xs z-10 select-none">
+      <div
+        onDoubleClick={(e) => {
+          if (e.target === e.currentTarget) handleToggleFullscreen()
+        }}
+        className="h-10 flex items-center justify-between px-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#0f131d] text-xs z-10 select-none cursor-default"
+      >
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 mr-2">
           
           {/* GROUP 1: Creation Hub */}
@@ -5196,12 +5258,24 @@ export default function App() {
                 <span className="font-bold text-base text-slate-900 dark:text-white">{quickLookItem.name}</span>
                 <span className="text-xs text-slate-500 dark:text-slate-400">({formatBytes(quickLookItem.size)})</span>
               </div>
-              <button onClick={() => setQuickLookItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleToggleFullscreen}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                  title={`Toggle Fullscreen Mode (Double Click) ${isWindowFullScreen ? '(Exit Fullscreen)' : '(Enter Fullscreen)'}`}
+                >
+                  {isWindowFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+                <button onClick={() => setQuickLookItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto flex items-center justify-center bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/5 rounded-xl p-4 min-h-[300px]">
+            <div
+              onDoubleClick={handleToggleFullscreen}
+              className="flex-1 overflow-y-auto flex items-center justify-center bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/5 rounded-xl p-4 min-h-[300px] cursor-default"
+            >
               {previewData?.type === 'image' ? (
                 <img src={previewData.previewData} alt={quickLookItem.name} className="max-h-[60vh] object-contain rounded-lg shadow-lg" />
               ) : previewData?.type === 'audio' ? (
@@ -7806,6 +7880,14 @@ export default function App() {
               </button>
 
               <button
+                onClick={handleToggleFullscreen}
+                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+                title={`Toggle Fullscreen Mode (Double Click or F11) ${isWindowFullScreen ? '(Exit Fullscreen)' : '(Enter Fullscreen)'}`}
+              >
+                {isWindowFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+
+              <button
                 onClick={() => setPhotoGallery((prev) => ({ ...prev, isOpen: false, isPlaying: false }))}
                 className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
                 title="Close Photo Gallery (Esc)"
@@ -7817,8 +7899,9 @@ export default function App() {
 
           {/* Center Stage: Image Viewport with Next & Prev floating controls */}
           <div
-            className="flex-1 relative flex items-center justify-center overflow-hidden p-6"
+            className="flex-1 relative flex items-center justify-center overflow-hidden p-6 cursor-default"
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={handleToggleFullscreen}
             onWheel={(e) => {
               if (e.deltaY < 0) {
                 setPhotoGallery((prev) => ({ ...prev, zoom: Math.min(5, Number((prev.zoom * 1.1).toFixed(2))) }))
@@ -7862,12 +7945,15 @@ export default function App() {
                 <img
                   src={photoGallery.previewData}
                   alt={photoGallery.items[photoGallery.currentIndex]?.name}
-                  onDoubleClick={() => setPhotoGallery((prev) => ({ ...prev, zoom: prev.zoom === 1 ? 2 : 1 }))}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    handleToggleFullscreen()
+                  }}
                   style={{
                     transform: `scale(${photoGallery.zoom}) rotate(${photoGallery.rotation}deg) scaleX(${photoGallery.isFlipped ? -1 : 1})`,
                     transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)'
                   }}
-                  className="max-h-[66vh] max-w-[85vw] object-contain rounded-xl shadow-2xl select-none cursor-zoom-in"
+                  className="max-h-[66vh] max-w-[85vw] object-contain rounded-xl shadow-2xl select-none cursor-pointer"
                 />
               ) : (
                 <div className="flex flex-col items-center gap-3 text-slate-400">

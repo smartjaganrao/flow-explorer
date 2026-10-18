@@ -251,6 +251,14 @@ function createWindow() {
     console.log('[Main] render-process-gone', details)
   })
 
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow?.webContents.send('app:shortcut', 'enter-fullscreen')
+  })
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow?.webContents.send('app:shortcut', 'leave-fullscreen')
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -2177,6 +2185,43 @@ function setupIpcHandlers() {
       return { success: true, settings: app.getLoginItemSettings() }
     } catch (err) {
       return { success: false, error: err.message }
+    }
+  })
+
+  // 40. Window Controls (Fullscreen & Maximize)
+  ipcMain.handle('window:toggle-fullscreen', async () => {
+    try {
+      if (mainWindow) {
+        const isFS = mainWindow.isFullScreen()
+        mainWindow.setFullScreen(!isFS)
+        return !isFS
+      }
+      return false
+    } catch (err) {
+      console.error('[Main] toggle-fullscreen error:', err)
+      return false
+    }
+  })
+
+  ipcMain.handle('window:is-fullscreen', async () => {
+    return mainWindow ? mainWindow.isFullScreen() : false
+  })
+
+  ipcMain.handle('window:toggle-maximize', async () => {
+    try {
+      if (mainWindow) {
+        if (mainWindow.isMaximized()) {
+          mainWindow.unmaximize()
+          return false
+        } else {
+          mainWindow.maximize()
+          return true
+        }
+      }
+      return false
+    } catch (err) {
+      console.error('[Main] toggle-maximize error:', err)
+      return false
     }
   })
 }
