@@ -12,7 +12,8 @@ import {
   ChevronDown, CheckSquare, Clock, FolderTree, Cpu, CheckCircle2,
   Filter, Boxes, AlertTriangle, Zap, Activity, Rocket, Gauge,
   AppWindow, PackageX, HelpCircle, RotateCcw,
-  ZoomIn, ZoomOut, RotateCw, Images, Settings
+  ZoomIn, ZoomOut, RotateCw, Images, Settings,
+  Monitor, Laptop, Cloud, Disc, Eject, Radio, Film, Image, Triangle, Tags, ArrowDown
 } from 'lucide-react'
 import flowLogo from './assets/logo.png'
 
@@ -40,14 +41,48 @@ const createMockAPI = () => {
 
   return {
     getHome: async () => homePath,
-    getVolumes: async () => [
-      { name: 'Home', path: homePath, type: 'home' },
-      { name: 'Desktop', path: `${homePath}/Desktop`, type: 'desktop' },
-      { name: 'Documents', path: `${homePath}/Documents`, type: 'documents' },
-      { name: 'Downloads', path: `${homePath}/Downloads`, type: 'downloads' },
-      { name: 'Projects', path: `${homePath}/Projects`, type: 'projects' },
-      { name: 'Macintosh HD', path: '/', type: 'root' }
-    ],
+    getVolumes: async () => ({
+      success: true,
+      favorites: [
+        { name: 'Desktop', path: `${homePath}/Desktop`, type: 'desktop', hasCloud: true },
+        { name: 'Documents', path: `${homePath}/Documents`, type: 'documents', hasCloud: true },
+        { name: 'Downloads', path: `${homePath}/Downloads`, type: 'downloads' },
+        { name: 'Movies', path: `${homePath}/Movies`, type: 'movies' },
+        { name: 'Music', path: `${homePath}/Music`, type: 'music' },
+        { name: 'Pictures', path: `${homePath}/Pictures`, type: 'pictures' },
+        { name: 'AI Tutor', path: `${homePath}/Projects`, type: 'custom' }
+      ],
+      cloudLocations: [
+        { name: 'iCloud Drive', path: `${homePath}/Library/Mobile Documents/com~apple~CloudDocs`, type: 'icloud', hasSync: true },
+        { name: 'O+Connect', path: `${homePath}/Library/CloudStorage/O+Connect-DeviceSpace`, type: 'cloudfolder' },
+        { name: 'Google Drive', path: `${homePath}/Library/CloudStorage/GoogleDrive-smartjaganrao@gmail.com`, type: 'googledrive' }
+      ],
+      deviceLocations: [
+        { name: 'jaganrao', path: homePath, type: 'home' },
+        { name: 'Jagan’s MacBook Air', path: 'my-computer', type: 'computer' },
+        { name: 'Jagan', path: '/', type: 'root' }
+      ],
+      removableVolumes: [
+        { name: 'Rise of the Tomb Raider 1.0.4', path: '/Volumes/Rise of the Tomb Raider 1.0.4', type: 'volume', isRemovable: true },
+        { name: 'Road Redemption', path: '/Volumes/Road Redemption', type: 'volume', isRemovable: true },
+        { name: 'Concat', path: '/Volumes/Concat', type: 'volume', isRemovable: true }
+      ],
+      airdrop: { name: 'AirDrop', path: 'airdrop', type: 'airdrop' },
+      trash: { name: 'Bin', path: `${homePath}/.Trash`, type: 'trash' },
+      computerName: 'Jagan’s MacBook Air',
+      primaryDiskName: 'Jagan',
+      flat: [
+        { name: 'Home', path: homePath, type: 'home' },
+        { name: 'Desktop', path: `${homePath}/Desktop`, type: 'desktop' },
+        { name: 'Documents', path: `${homePath}/Documents`, type: 'documents' },
+        { name: 'Downloads', path: `${homePath}/Downloads`, type: 'downloads' },
+        { name: 'Pictures', path: `${homePath}/Pictures`, type: 'pictures' },
+        { name: 'Music', path: `${homePath}/Music`, type: 'music' },
+        { name: 'Movies', path: `${homePath}/Movies`, type: 'movies' },
+        { name: 'Macintosh HD', path: '/', type: 'root' }
+      ]
+    }),
+    ejectVolume: async () => ({ success: true }),
     getDiskSpace: async () => ({ success: true, freeBytes: 135 * 1024 * 1024 * 1024, totalBytes: 500 * 1024 * 1024 * 1024, usedPercent: 73 }),
     getDiskBreakdown: async () => ({
       success: true,
@@ -307,12 +342,13 @@ function formatDate(timestamp) {
 
 // Color Tag Definitions
 const COLOR_TAGS = [
-  { name: 'red', hex: '#ef4444', label: 'Important' },
-  { name: 'orange', hex: '#f97316', label: 'Review' },
-  { name: 'yellow', hex: '#eab308', label: 'In Progress' },
-  { name: 'green', hex: '#22c55e', label: 'Approved' },
-  { name: 'blue', hex: '#3b82f6', label: 'Reference' },
-  { name: 'purple', hex: '#a855f7', label: 'Personal' }
+  { name: 'red', hex: '#ef4444', label: 'Red' },
+  { name: 'orange', hex: '#f97316', label: 'Orange' },
+  { name: 'yellow', hex: '#eab308', label: 'Yellow' },
+  { name: 'green', hex: '#22c55e', label: 'Green' },
+  { name: 'blue', hex: '#3b82f6', label: 'Blue' },
+  { name: 'purple', hex: '#a855f7', label: 'Purple' },
+  { name: 'grey', hex: '#94a3b8', label: 'Grey' }
 ]
 
 // Color-coded file icons
@@ -882,6 +918,16 @@ export default function App() {
 
   // Quick Access Volumes & System Stats
   const [volumes, setVolumes] = useState([])
+  const [sidebarData, setSidebarData] = useState({
+    favorites: [],
+    cloudLocations: [],
+    deviceLocations: [],
+    removableVolumes: [],
+    airdrop: { name: 'AirDrop', path: 'airdrop', type: 'airdrop' },
+    trash: { name: 'Bin', path: '', type: 'trash' },
+    computerName: 'MacBook Air',
+    primaryDiskName: 'Jagan'
+  })
   const [diskStats, setDiskStats] = useState({ freeBytes: 0, totalBytes: 0, usedPercent: 0 })
   const [gitInfo, setGitInfo] = useState({ isGit: false, branch: '', modifiedCount: 0, untrackedCount: 0 })
 
@@ -1485,13 +1531,44 @@ export default function App() {
     addToast('All preferences reset to factory defaults', 'success')
   }, [updateViewMode, addToast])
 
+  const refreshSidebar = useCallback(async () => {
+    try {
+      const vols = await api.getVolumes()
+      if (vols && typeof vols === 'object' && !Array.isArray(vols)) {
+        setSidebarData(vols)
+        setVolumes(vols.flat || [])
+      } else if (Array.isArray(vols)) {
+        setVolumes(vols)
+        setSidebarData((prev) => ({ ...prev, favorites: vols }))
+      }
+    } catch {}
+  }, [])
+
+  const handleEjectVolume = useCallback(async (volume, e) => {
+    if (e) e.stopPropagation()
+    if (!api.ejectVolume) return
+    const res = await api.ejectVolume(volume.path)
+    if (res.success) {
+      addToast(`Ejected "${volume.name}"`, 'success')
+      refreshSidebar()
+    } else {
+      addToast(`Could not eject "${volume.name}": ${res.error || 'Disk in use'}`, 'error')
+    }
+  }, [addToast, refreshSidebar])
+
   // Initial Mount
   useEffect(() => {
     const initialize = async () => {
       try {
         const home = await api.getHome()
         const vols = await api.getVolumes()
-        setVolumes(vols)
+        if (vols && typeof vols === 'object' && !Array.isArray(vols)) {
+          setSidebarData(vols)
+          setVolumes(vols.flat || [])
+        } else if (Array.isArray(vols)) {
+          setVolumes(vols)
+          setSidebarData((prev) => ({ ...prev, favorites: vols }))
+        }
 
         if (api.getDiskSpace) {
           const stats = await api.getDiskSpace()
@@ -4500,121 +4577,263 @@ export default function App() {
       {/* 3. MAIN WORKSPACE */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Left Sidebar */}
+        {/* Left Sidebar - Native macOS Finder Design */}
         <div
           style={{ width: `${sidebarWidth}px` }}
-          className="flex flex-col border-r border-slate-200 dark:border-white/[0.08] mac-glass-sidebar text-xs p-2.5 select-none flex-shrink-0 overflow-y-auto"
+          className="flex flex-col border-r border-slate-200 dark:border-white/[0.08] mac-glass-sidebar text-[13px] py-2 px-2 select-none flex-shrink-0 overflow-y-auto no-scrollbar font-normal text-slate-800 dark:text-slate-200"
         >
-          {/* This Mac / My Computer (Mac Explorer Signature) */}
-          <div className="mb-3">
+          {/* SECTION 1: FAVORITES / USER FOLDERS */}
+          <div className="space-y-0.5">
+            {/* Standard Favorites */}
+            {sidebarData.favorites.map((fav) => {
+              const isActive = currentPaneState.path === fav.path
+              return (
+                <button
+                  key={fav.path}
+                  onClick={() => navigateTo(fav.path)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all group ${
+                    isActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {/* Accurate macOS Finder Folder Icons */}
+                  {fav.type === 'desktop' && (
+                    <Monitor className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+                  {fav.type === 'documents' && (
+                    <FileText className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+                  {fav.type === 'downloads' && (
+                    <div className="w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center text-white flex-shrink-0 shadow-xs">
+                      <ArrowDown className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </div>
+                  )}
+                  {fav.type === 'movies' && (
+                    <Film className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+                  {fav.type === 'music' && (
+                    <Music className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+                  {fav.type === 'pictures' && (
+                    <Image className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+                  {fav.type === 'custom' && (
+                    <Folder className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  )}
+
+                  <span className="truncate">{fav.name}</span>
+
+                  {/* iCloud cloud outline icon on right (Desktop & Documents) */}
+                  {fav.hasCloud && (
+                    <Cloud className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 ml-auto flex-shrink-0 stroke-[1.5]" />
+                  )}
+                </button>
+              )
+            })}
+
+            {/* Custom User Pinned Favorites */}
+            {favorites.map((userFav) => {
+              if (sidebarData.favorites.some((f) => f.path === userFav.path)) return null
+              const isActive = currentPaneState.path === userFav.path
+              return (
+                <div
+                  key={userFav.path}
+                  onClick={() => navigateTo(userFav.path)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-all cursor-pointer group ${
+                    isActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <Folder className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                    <span className="truncate">{userFav.name}</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleFavorite(userFav.path)
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-0.5 transition-opacity"
+                    title="Remove from sidebar"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* SECTION 2: LOCATIONS */}
+          <div className="space-y-0.5 mt-3">
+            <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-tight px-2.5 py-1 select-none">
+              Locations
+            </div>
+
+            {/* Cloud Storage (iCloud Drive, O+Connect, Google Drive, etc.) */}
+            {sidebarData.cloudLocations.map((cloud) => {
+              const isActive = currentPaneState.path === cloud.path
+              return (
+                <button
+                  key={cloud.path}
+                  onClick={() => navigateTo(cloud.path)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all group ${
+                    isActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {cloud.type === 'icloud' && (
+                    <Cloud className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+                  {cloud.type === 'googledrive' && (
+                    <Triangle className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+                  {['cloudfolder', 'onedrive', 'dropbox'].includes(cloud.type) && (
+                    <Folder className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+
+                  <span className="truncate">{cloud.name}</span>
+
+                  {cloud.type === 'icloud' && (
+                    <div
+                      className="ml-auto w-3 h-3 rounded-full border border-slate-400 dark:border-slate-500 border-r-transparent animate-spin flex-shrink-0 opacity-70"
+                      title="iCloud Drive Syncing"
+                    />
+                  )}
+                </button>
+              )
+            })}
+
+            {/* Device Locations (User Home, MacBook Air, Primary Disk) */}
+            {sidebarData.deviceLocations.map((dev) => {
+              const isActive = currentPaneState.path === dev.path
+              return (
+                <button
+                  key={dev.name + dev.path}
+                  onClick={() => navigateTo(dev.path)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all group ${
+                    isActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {dev.type === 'home' && (
+                    <Home className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+                  {dev.type === 'computer' && (
+                    <Laptop className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+                  {dev.type === 'root' && (
+                    <HardDrive className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                  )}
+
+                  <span className="truncate">{dev.name}</span>
+                </button>
+              )
+            })}
+
+            {/* Mounted Removable / DMG / Game Volumes in /Volumes */}
+            {sidebarData.removableVolumes.map((vol) => {
+              const isActive = currentPaneState.path === vol.path
+              return (
+                <div
+                  key={vol.path}
+                  onClick={() => navigateTo(vol.path)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-all cursor-pointer group ${
+                    isActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate flex-1 mr-1">
+                    <Disc className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                    <span className="truncate">{vol.name}</span>
+                  </div>
+                  <button
+                    onClick={(e) => handleEjectVolume(vol, e)}
+                    className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-0.5 rounded transition-all opacity-60 group-hover:opacity-100"
+                    title={`Eject "${vol.name}"`}
+                  >
+                    <Eject className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+
+            {/* AirDrop */}
             <button
-              onClick={() => navigateTo('my-computer')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all border ${
-                currentPaneState.path === 'my-computer'
-                  ? 'bg-indigo-50 dark:bg-gradient-to-r dark:from-indigo-500/25 dark:via-purple-500/25 dark:to-cyan-500/25 text-indigo-900 dark:text-white border-indigo-200 dark:border-indigo-500/40 shadow-sm'
-                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border-transparent'
+              onClick={() => addToast('AirDrop transfers are handled natively in macOS Finder', 'info')}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200"
+            >
+              <Radio className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span>AirDrop</span>
+            </button>
+
+            {/* Bin / Trash */}
+            <button
+              onClick={() => navigateTo(sidebarData.trash.path || `${api.getHome ? '~' : ''}/.Trash`)}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all group ${
+                currentPaneState.path === sidebarData.trash.path
+                  ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                  : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
               }`}
             >
-              <div className="w-5 h-5 rounded-md bg-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
-                <HardDrive className="w-3.5 h-3.5" />
-              </div>
-              <span>This Mac</span>
-              <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-400">
-                {((diskStats.totalBytes - diskStats.freeBytes) / (1024 ** 3)).toFixed(0)}G
-              </span>
+              <Trash2 className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span>Bin</span>
             </button>
           </div>
 
-          {/* Favorites */}
-          {favorites.length > 0 && (
-            <div className="mb-3">
-              <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider px-2 py-1 flex items-center gap-1">
-                <Star className="w-3 h-3 text-amber-500 fill-amber-500" /> Favorites
-              </div>
-              <div className="flex flex-col gap-0.5 mt-0.5">
-                {favorites.map((fav) => (
-                  <div
-                    key={fav.path}
-                    onClick={() => navigateTo(fav.path)}
-                    className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left cursor-pointer transition-colors ${
-                      currentPaneState.path === fav.path
-                        ? 'bg-indigo-100 dark:bg-indigo-600/20 text-indigo-900 dark:text-indigo-400 font-semibold'
-                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-white/5 font-medium'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <Folder className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="truncate">{fav.name}</span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFavorite(fav.path)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {/* SECTION 3: TAGS */}
+          <div className="space-y-0.5 mt-3 mb-2">
+            <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-tight px-2.5 py-1 select-none">
+              Tags
             </div>
-          )}
+            {COLOR_TAGS.map((t) => {
+              const isTagActive = currentPaneState.tagFilter === t.name
+              return (
+                <button
+                  key={t.name}
+                  onClick={() => {
+                    setCurPaneState((prev) => ({
+                      ...prev,
+                      tagFilter: prev.tagFilter === t.name ? null : t.name
+                    }))
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all ${
+                    isTagActive
+                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
+                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-xs"
+                    style={{ backgroundColor: t.hex }}
+                  />
+                  <span>{t.label}</span>
+                </button>
+              )
+            })}
 
-          {/* Quick Access */}
-          <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider px-2 py-1">
-            Quick Access
-          </div>
-          <div className="flex flex-col gap-0.5 mt-0.5">
-            {volumes.map((vol) => (
-              <button
-                key={vol.path}
-                onClick={() => navigateTo(vol.path)}
-                className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-colors ${
-                  currentPaneState.path === vol.path
-                    ? 'bg-indigo-100 dark:bg-indigo-600/20 text-indigo-900 dark:text-indigo-400 font-semibold'
-                    : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-white/5 font-medium'
-                }`}
-              >
-                {vol.type === 'home' && <Home className="w-4 h-4 text-sky-500" />}
-                {vol.type === 'desktop' && <HardDrive className="w-4 h-4 text-purple-500" />}
-                {vol.type === 'documents' && <Folder className="w-4 h-4 text-amber-500" />}
-                {vol.type === 'downloads' && <Download className="w-4 h-4 text-emerald-500" />}
-                {vol.type === 'root' && <HardDrive className="w-4 h-4 text-rose-500" />}
-                {['pictures', 'volumes', 'projects', 'music', 'movies'].includes(vol.type) && <Folder className="w-4 h-4 text-amber-500" />}
-                <span className="truncate">{vol.name}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Tags */}
-          <div className="mt-4 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider px-2 py-1">
-            Tags
-          </div>
-          <div className="flex flex-wrap gap-1 px-2 mt-1">
-            {COLOR_TAGS.map((t) => (
-              <button
-                key={t.name}
-                onClick={() => {
-                  setCurPaneState((prev) => ({
-                    ...prev,
-                    tagFilter: prev.tagFilter === t.name ? null : t.name
-                  }))
-                }}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] border transition-all ${
-                  currentPaneState.tagFilter === t.name
-                    ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-900 dark:text-white font-semibold'
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 font-medium'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.hex }} />
-                <span>{t.label}</span>
-              </button>
-            ))}
+            {/* All Tags... */}
+            <button
+              onClick={() => {
+                setCurPaneState((prev) => ({
+                  ...prev,
+                  tagFilter: null
+                }))
+                addToast('Showing all tags', 'info')
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200"
+            >
+              <Tags className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <span>All Tags...</span>
+            </button>
           </div>
 
-          {/* Interactive Disk Usage Breakdown Widget */}
-          <div className="mt-auto pt-3 border-t border-slate-200 dark:border-flow-borderDark/40 px-2">
+          {/* Collapsible Storage Health / Cleaner Widget Footer */}
+          <div className="mt-auto pt-2 border-t border-slate-200/80 dark:border-white/5">
             <DiskUsageWidget
               breakdown={diskBreakdown}
               loading={diskBreakdownLoading}

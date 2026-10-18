@@ -1,9 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, nativeImage, Menu, clipboard } from 'electron'
 import { join, basename, dirname, extname, resolve } from 'path'
-import { promises as fs } from 'fs'
+import { promises as fs, existsSync, readdirSync, readlinkSync } from 'fs'
 import os from 'os'
 import crypto from 'crypto'
-import { exec } from 'child_process'
+import { exec, execSync } from 'child_process'
 
 let mainWindow = null
 
@@ -386,31 +386,160 @@ function setupIpcHandlers() {
     return os.homedir()
   })
 
-  // 2. Get Standard Quick Access Volumes & Directories
+  // 2. Get Standard Quick Access Volumes & Native macOS Finder Sidebar Locations
   ipcMain.handle('fs:get-volumes', async () => {
     const home = os.homedir()
-    const quickLocations = [
-      { name: 'Home', path: home, type: 'home' },
-      { name: 'Desktop', path: join(home, 'Desktop'), type: 'desktop' },
-      { name: 'Documents', path: join(home, 'Documents'), type: 'documents' },
+    let computerName = 'MacBook Air'
+    try {
+      computerName = execSync('scutil --get ComputerName', { encoding: 'utf8' }).trim()
+    } catch {}
+
+    let primaryDiskName = 'Jagan'
+    try {
+      const volEntries = readdirSync('/Volumes', { withFileTypes: true })
+      for (const v of volEntries) {
+        if (v.isSymbolicLink()) {
+          const target = readlinkSync(join('/Volumes', v.name))
+          if (target === '/' || target === '/System/Volumes/Data') {
+            primaryDiskName = v.name
+            break
+          }
+        }
+      }
+    } catch {}
+
+    // 1. Standard User Folders / Favorites
+    const defaultFavorites = [
+      { name: 'Desktop', path: join(home, 'Desktop'), type: 'desktop', hasCloud: true },
+      { name: 'Documents', path: join(home, 'Documents'), type: 'documents', hasCloud: true },
       { name: 'Downloads', path: join(home, 'Downloads'), type: 'downloads' },
-      { name: 'Pictures', path: join(home, 'Pictures'), type: 'pictures' },
-      { name: 'Music', path: join(home, 'Music'), type: 'music' },
       { name: 'Movies', path: join(home, 'Movies'), type: 'movies' },
-      { name: 'Macintosh HD', path: '/', type: 'root' },
-      { name: 'Volumes', path: '/Volumes', type: 'volumes' }
+      { name: 'Music', path: join(home, 'Music'), type: 'music' },
+      { name: 'Pictures', path: join(home, 'Pictures'), type: 'pictures' }
     ]
 
-    const validLocations = []
-    for (const loc of quickLocations) {
-      try {
-        await fs.access(loc.path)
-        validLocations.push(loc)
-      } catch {
-        // Skip paths without read access
+    // Check user custom project folders (e.g. AI Tutor)
+    const customCandidates = [
+      { name: 'AI Tutor', path: join(home, 'Projects/AI Tutor') },
+      { name: 'Projects', path: join(home, 'Projects') }
+    ]
+    for (const c of customCandidates) {
+      if (existsSync(c.path)) {
+        defaultFavorites.push({ name: c.name, path: c.path, type: 'custom' })
+        break
       }
     }
-    return validLocations
+
+    const validFavorites = []
+    for (const f of defaultFavorites) {
+      if (existsSync(f.path)) {
+        validFavorites.push(f)
+      }
+    }
+
+    // 2. Cloud Storage Locations
+    const cloudLocations = []
+    const icloudPath = join(home, 'Library/Mobile Documents/com~apple~CloudDocs')
+    if (existsSync(icloudPath)) {
+      cloudLocations.push({ name: 'iCloud Drive', path: icloudPath, type: 'icloud', hasSync: true })
+    }
+
+    const cloudStorageDir = join(home, 'Library/CloudStorage')
+    if (existsSync(cloudStorageDir)) {
+      try {
+        const cEntries = readdirSync(cloudStorageDir, { withFileTypes: true })
+        for (const c of cEntries) {
+          if (c.name.startsWith('.')) continue
+          let label = c.name
+          let type = 'cloudfolder'
+          if (c.name.startsWith('GoogleDrive-')) {
+            label = 'Google Drive'
+            type = 'googledrive'
+          } else if (c.name.startsWith('O+Connect-')) {
+            label = 'O+Connect'
+            type = 'cloudfolder'
+          } else if (c.name.startsWith('OneDrive-')) {
+            label = 'OneDrive'
+            type = 'onedrive'
+          } else if (c.name.startsWith('Dropbox-')) {
+            label = 'Dropbox'
+            type = 'dropbox'
+          }
+          cloudLocations.push({
+            name: label,
+            path: join(cloudStorageDir, c.name),
+            type
+          })
+        }
+      } catch {}
+    }
+
+    // 3. User Home & Computer
+    const username = os.userInfo().username || 'Home'
+    const deviceLocations = [
+      { name: username, path: home, type: 'home' },
+      { name: computerName, path: 'my-computer', type: 'computer' },
+      { name: primaryDiskName, path: '/', type: 'root' }
+    ]
+
+    // 4. Mounted Removable / Game / DMG Volumes in /Volumes
+    const removableVolumes = []
+    try {
+      const vEntries = readdirSync('/Volumes', { withFileTypes: true })
+      for (const v of vEntries) {
+        if (v.name.startsWith('.') || v.name === 'Recovery') continue
+        const fullPath = join('/Volumes', v.name)
+        try {
+          if (v.isSymbolicLink()) {
+            const target = readlinkSync(fullPath)
+            if (target === '/' || target === '/System/Volumes/Data') continue
+          }
+          removableVolumes.push({
+            name: v.name,
+            path: fullPath,
+            type: 'volume',
+            isRemovable: true
+          })
+        } catch {}
+      }
+    } catch {}
+
+    // 5. Special Locations (AirDrop, Trash)
+    const trashPath = join(home, '.Trash')
+
+    const flatList = [
+      ...validFavorites,
+      ...cloudLocations,
+      ...deviceLocations,
+      ...removableVolumes,
+      { name: 'Bin', path: trashPath, type: 'trash' }
+    ]
+
+    return {
+      success: true,
+      favorites: validFavorites,
+      cloudLocations,
+      deviceLocations,
+      removableVolumes,
+      airdrop: { name: 'AirDrop', path: 'airdrop', type: 'airdrop' },
+      trash: { name: 'Bin', path: trashPath, type: 'trash' },
+      computerName,
+      primaryDiskName,
+      flat: flatList
+    }
+  })
+
+  // 2b. Eject Volume
+  ipcMain.handle('fs:eject-volume', async (_event, volumePath) => {
+    return new Promise((resolveResult) => {
+      exec(`hdiutil detach "${volumePath}" 2>/dev/null || diskutil unmount "${volumePath}" || diskutil eject "${volumePath}"`, (err, stdout, stderr) => {
+        if (err) {
+          resolveResult({ success: false, error: stderr || err.message })
+        } else {
+          resolveResult({ success: true, message: stdout })
+        }
+      })
+    })
   })
 
   // 3. Get Disk Space Stats (Macintosh HD)

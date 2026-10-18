@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 const explorerAPI = {
   getHome: () => ipcRenderer.invoke('fs:get-home'),
   getVolumes: () => ipcRenderer.invoke('fs:get-volumes'),
+  ejectVolume: (volumePath) => ipcRenderer.invoke('fs:eject-volume', volumePath),
   getDiskSpace: () => ipcRenderer.invoke('fs:get-disk-space'),
   getGitStatus: (dirPath) => ipcRenderer.invoke('fs:get-git-status', dirPath),
   calcHash: (filePath) => ipcRenderer.invoke('fs:calc-hash', filePath),
