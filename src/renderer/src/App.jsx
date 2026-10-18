@@ -4785,51 +4785,61 @@ export default function App() {
             </button>
           </div>
 
-          {/* SECTION 3: TAGS */}
-          <div className="space-y-0.5 mt-3 mb-2">
-            <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-tight px-2.5 py-1 select-none">
-              Tags
-            </div>
-            {COLOR_TAGS.map((t) => {
-              const isTagActive = currentPaneState.tagFilter === t.name
-              return (
+          {/* SECTION 3: TAGS (Single line layout) */}
+          <div className="mt-3 mb-2 px-2.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 dark:text-slate-500 tracking-tight py-1 select-none">
+              <span>Tags</span>
+              {currentPaneState.tagFilter && (
                 <button
-                  key={t.name}
-                  onClick={() => {
-                    setCurPaneState((prev) => ({
-                      ...prev,
-                      tagFilter: prev.tagFilter === t.name ? null : t.name
-                    }))
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all ${
-                    isTagActive
-                      ? 'bg-slate-300/80 dark:bg-white/15 text-slate-950 dark:text-white font-medium shadow-xs'
-                      : 'hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
-                  }`}
+                  onClick={() => setCurPaneState((prev) => ({ ...prev, tagFilter: null }))}
+                  className="text-[10px] text-blue-500 hover:underline font-normal"
                 >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-xs"
-                    style={{ backgroundColor: t.hex }}
-                  />
-                  <span>{t.label}</span>
+                  Clear ({currentPaneState.tagFilter})
                 </button>
-              )
-            })}
-
-            {/* All Tags... */}
-            <button
-              onClick={() => {
-                setCurPaneState((prev) => ({
-                  ...prev,
-                  tagFilter: null
-                }))
-                addToast('Showing all tags', 'info')
-              }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200"
-            >
-              <Tags className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <span>All Tags...</span>
-            </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-1 py-1.5 px-2 bg-slate-200/50 dark:bg-white/5 rounded-lg border border-slate-300/40 dark:border-white/5">
+              {COLOR_TAGS.map((t) => {
+                const isTagActive = currentPaneState.tagFilter === t.name
+                return (
+                  <button
+                    key={t.name}
+                    title={t.label}
+                    onClick={() => {
+                      setCurPaneState((prev) => ({
+                        ...prev,
+                        tagFilter: prev.tagFilter === t.name ? null : t.name
+                      }))
+                    }}
+                    className={`relative p-1 rounded-full transition-all hover:scale-125 focus:outline-hidden ${
+                      isTagActive ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-100 dark:ring-offset-slate-900 scale-110' : ''
+                    }`}
+                  >
+                    <span
+                      className="block w-3 h-3 rounded-full shadow-xs"
+                      style={{ backgroundColor: t.hex }}
+                    />
+                  </button>
+                )
+              })}
+              <div className="h-3 w-px bg-slate-300 dark:bg-white/10 mx-0.5" />
+              {/* All Tags / Clear Filter */}
+              <button
+                title="All Tags / Clear filter"
+                onClick={() => {
+                  setCurPaneState((prev) => ({
+                    ...prev,
+                    tagFilter: null
+                  }))
+                  addToast('Showing all tags', 'info')
+                }}
+                className={`p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-300/40 dark:hover:bg-white/10 transition-colors ${
+                  !currentPaneState.tagFilter ? 'text-blue-500' : ''
+                }`}
+              >
+                <Tags className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Collapsible Storage Health / Cleaner Widget Footer */}
