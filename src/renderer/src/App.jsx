@@ -12,7 +12,7 @@ import {
   ChevronDown, CheckSquare, Clock, FolderTree, Cpu, CheckCircle2,
   Filter, Boxes, AlertTriangle, Zap, Activity, Rocket, Gauge,
   AppWindow, PackageX, HelpCircle, RotateCcw,
-  ZoomIn, ZoomOut, RotateCw, Images
+  ZoomIn, ZoomOut, RotateCw, Images, Settings
 } from 'lucide-react'
 import flowLogo from './assets/logo.png'
 
@@ -1037,8 +1037,21 @@ export default function App() {
     document.addEventListener('mouseup', onMouseUp)
   }, [inspectorWidth])
 
-  // 4. Dual-Pane Split Ratio (Drag Resizable)
-  const [splitRatio, setSplitRatio] = useState(50)
+  // 4. Dual-Pane Split Ratio (Drag Resizable & Persisted)
+  const [splitRatio, setSplitRatio] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flow_split_ratio')
+      return saved ? Number(saved) : 50
+    } catch {
+      return 50
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('flow_split_ratio', splitRatio.toString())
+    } catch {}
+  }, [splitRatio])
 
   const startSplitResize = useCallback((e) => {
     e.preventDefault()
@@ -1066,8 +1079,86 @@ export default function App() {
     document.addEventListener('mouseup', onMouseUp)
   }, [])
 
+  // Persisted Explorer Layout & View Preferences
+  const [isDualPane, setIsDualPane] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flow_is_dual_pane')
+      return saved !== null ? JSON.parse(saved) : false
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('flow_is_dual_pane', JSON.stringify(isDualPane))
+    } catch {}
+  }, [isDualPane])
+
+  const [showInspector, setShowInspector] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flow_show_inspector')
+      return saved !== null ? JSON.parse(saved) : true
+    } catch {
+      return true
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('flow_show_inspector', JSON.stringify(showInspector))
+    } catch {}
+  }, [showInspector])
+
+  const savedViewMode = useMemo(() => {
+    try {
+      return localStorage.getItem('flow_view_mode') || 'details'
+    } catch {
+      return 'details'
+    }
+  }, [])
+
+  const savedShowHidden = useMemo(() => {
+    try {
+      const s = localStorage.getItem('flow_show_hidden')
+      return s !== null ? JSON.parse(s) : false
+    } catch {
+      return false
+    }
+  }, [])
+
+  const savedSortField = useMemo(() => {
+    try {
+      return localStorage.getItem('flow_sort_field') || 'name'
+    } catch {
+      return 'name'
+    }
+  }, [])
+
+  const savedSortDirection = useMemo(() => {
+    try {
+      return localStorage.getItem('flow_sort_direction') || 'asc'
+    } catch {
+      return 'asc'
+    }
+  }, [])
+
+  const [restoreLastFolder, setRestoreLastFolder] = useState(() => {
+    try {
+      const s = localStorage.getItem('flow_restore_last_folder')
+      return s !== null ? JSON.parse(s) : true
+    } catch {
+      return true
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('flow_restore_last_folder', JSON.stringify(restoreLastFolder))
+    } catch {}
+  }, [restoreLastFolder])
+
   // Panes State
-  const [isDualPane, setIsDualPane] = useState(false)
   const [activePane, setActivePane] = useState('left')
 
   const [leftPane, setLeftPane] = useState({
@@ -1079,10 +1170,10 @@ export default function App() {
     filterQuery: '',
     categoryFilter: 'all',
     tagFilter: null,
-    showHidden: false,
-    viewMode: 'details',
-    sortField: 'name',
-    sortDirection: 'asc'
+    showHidden: savedShowHidden,
+    viewMode: savedViewMode,
+    sortField: savedSortField,
+    sortDirection: savedSortDirection
   })
 
   const [rightPane, setRightPane] = useState({
@@ -1094,10 +1185,10 @@ export default function App() {
     filterQuery: '',
     categoryFilter: 'all',
     tagFilter: null,
-    showHidden: false,
-    viewMode: 'details',
-    sortField: 'name',
-    sortDirection: 'asc'
+    showHidden: savedShowHidden,
+    viewMode: savedViewMode,
+    sortField: savedSortField,
+    sortDirection: savedSortDirection
   })
 
   // Omnibar Address Edit Mode State
@@ -1106,7 +1197,6 @@ export default function App() {
   const addressInputRef = useRef(null)
 
   // Live Inspector Preview Pane & Checksum
-  const [showInspector, setShowInspector] = useState(true)
   const [previewData, setPreviewData] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [hashResult, setHashResult] = useState({ sha256: '', md5: '', loading: false })
@@ -1138,7 +1228,14 @@ export default function App() {
       return true
     }
   })
-  const [loginItemStatus, setLoginItemStatus] = useState(false)
+  const [loginItemStatus, setLoginItemStatus] = useState(() => {
+    try {
+      const s = localStorage.getItem('flow_login_item_status')
+      return s !== null ? JSON.parse(s) : false
+    } catch {
+      return false
+    }
+  })
   const [systemMenuOpen, setSystemMenuOpen] = useState(false)
 
   // Clipboard State (Windows Explorer operation + sourceDir tracking)
@@ -1316,6 +1413,78 @@ export default function App() {
     }
   }, [activePane])
 
+  // Persisted viewMode, showHidden, and sort handlers
+  const updateViewMode = useCallback((mode) => {
+    try {
+      localStorage.setItem('flow_view_mode', mode)
+    } catch {}
+    setLeftPane((prev) => ({ ...prev, viewMode: mode }))
+    setRightPane((prev) => ({ ...prev, viewMode: mode }))
+  }, [])
+
+  const toggleShowHidden = useCallback(() => {
+    setLeftPane((prev) => {
+      const next = !prev.showHidden
+      try {
+        localStorage.setItem('flow_show_hidden', JSON.stringify(next))
+      } catch {}
+      return { ...prev, showHidden: next }
+    })
+    setRightPane((prev) => ({ ...prev, showHidden: !prev.showHidden }))
+  }, [])
+
+  const handleSortChange = useCallback((paneName, field) => {
+    const setter = paneName === 'left' ? setLeftPane : setRightPane
+    setter((prev) => {
+      const nextDir = prev.sortField === field && prev.sortDirection === 'asc' ? 'desc' : 'asc'
+      try {
+        localStorage.setItem('flow_sort_field', field)
+        localStorage.setItem('flow_sort_direction', nextDir)
+      } catch {}
+      return {
+        ...prev,
+        sortField: field,
+        sortDirection: nextDir
+      }
+    })
+  }, [])
+
+  const handleResetSettings = useCallback(() => {
+    if (!window.confirm('Reset all settings, views, and preferences to factory defaults?')) return
+    const keysToRemove = [
+      'flow_theme', 'flow_view_mode', 'flow_show_hidden', 'flow_sort_field',
+      'flow_sort_direction', 'flow_is_dual_pane', 'flow_show_inspector',
+      'flow_split_ratio', 'flow_restore_last_folder', 'flow_last_path',
+      'flow_use_inbuilt_gallery', 'flow_column_widths', 'flow_sidebar_width',
+      'flow_inspector_width', 'flow_login_item_status'
+    ]
+    keysToRemove.forEach((k) => {
+      try { localStorage.removeItem(k) } catch {}
+    })
+    setTheme('dark')
+    setIsDualPane(false)
+    setShowInspector(true)
+    setSplitRatio(50)
+    setUseInbuiltGallery(true)
+    setRestoreLastFolder(true)
+    updateViewMode('details')
+    setLeftPane((prev) => ({
+      ...prev,
+      showHidden: false,
+      viewMode: 'details',
+      sortField: 'name',
+      sortDirection: 'asc'
+    }))
+    setRightPane((prev) => ({
+      ...prev,
+      showHidden: false,
+      viewMode: 'details',
+      sortField: 'name',
+      sortDirection: 'asc'
+    }))
+    addToast('All preferences reset to factory defaults', 'success')
+  }, [updateViewMode, addToast])
+
   // Initial Mount
   useEffect(() => {
     const initialize = async () => {
@@ -1329,10 +1498,19 @@ export default function App() {
           if (stats.success) setDiskStats(stats)
         }
 
+        let startPath = home
+        try {
+          const shouldRestore = localStorage.getItem('flow_restore_last_folder') !== 'false'
+          const savedPath = localStorage.getItem('flow_last_path')
+          if (shouldRestore && savedPath && savedPath !== 'my-computer') {
+            startPath = savedPath
+          }
+        } catch {}
+
         setLeftPane((prev) => ({
           ...prev,
-          path: home,
-          history: [home],
+          path: startPath,
+          history: [startPath],
           historyIndex: 0
         }))
 
@@ -1344,13 +1522,22 @@ export default function App() {
           historyIndex: 0
         }))
 
-        setTabs([{ id: 'tab-1', path: home, name: 'Home', history: [home], historyIndex: 0 }])
+        const initialFolderName = startPath === '/' ? 'Macintosh HD' : startPath.split('/').pop() || 'Home'
+        setTabs([{ id: 'tab-1', path: startPath, name: initialFolderName, history: [startPath], historyIndex: 0 }])
       } catch (err) {
         addToast(`Initialization error: ${err.message}`, 'error')
       }
     }
     initialize()
   }, [addToast])
+
+  useEffect(() => {
+    if (leftPane.path && leftPane.path !== 'my-computer' && restoreLastFolder) {
+      try {
+        localStorage.setItem('flow_last_path', leftPane.path)
+      } catch {}
+    }
+  }, [leftPane.path, restoreLastFolder])
 
   // Load directory items
   const loadDirectory = useCallback(async (targetPane, targetPath, options = {}) => {
@@ -2824,9 +3011,9 @@ export default function App() {
       } else if (action === 'close-tab') {
         handleCloseTab(activeTabId)
       } else if (action === 'view-details') {
-        setCurPaneState((p) => ({ ...p, viewMode: 'details' }))
+        updateViewMode('details')
       } else if (action === 'view-grid') {
-        setCurPaneState((p) => ({ ...p, viewMode: 'grid' }))
+        updateViewMode('grid')
       } else if (action === 'toggle-dual') {
         setIsDualPane((p) => !p)
       }
@@ -3104,14 +3291,19 @@ export default function App() {
         setIsDualPane((prev) => !prev)
         return
       }
+      if (isCtrlOrCmd && (key === ',' || code === 'Comma')) {
+        e.preventDefault()
+        setShowDefaultManagerModal(true)
+        return
+      }
       if (isCtrlOrCmd && e.key === '1') {
         e.preventDefault()
-        setCurPaneState((prev) => ({ ...prev, viewMode: 'details' }))
+        updateViewMode('details')
         return
       }
       if (isCtrlOrCmd && e.key === '2') {
         e.preventDefault()
-        setCurPaneState((prev) => ({ ...prev, viewMode: 'grid' }))
+        updateViewMode('grid')
         return
       }
 
@@ -3240,19 +3432,20 @@ export default function App() {
       { id: 'batch-rename', label: 'Power Batch Renamer', shortcut: 'Cmd+Shift+R', icon: SlidersHorizontal, action: () => setBatchRenameModal((prev) => ({ ...prev, isOpen: true })) },
       { id: 'toggle-terminal', label: 'Toggle Embedded Terminal Drawer', shortcut: 'Ctrl+`', icon: TerminalSquare, action: () => setTerminalDrawerOpen((prev) => !prev) },
       { id: 'toggle-dual', label: 'Toggle Dual-Pane Split View', shortcut: 'Cmd+\\', icon: Columns, action: () => setIsDualPane((prev) => !prev) },
+      { id: 'settings', label: 'Preferences & Settings', shortcut: 'Cmd+,', icon: Settings, action: () => setShowDefaultManagerModal(true) },
       { id: 'toggle-theme', label: `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`, icon: theme === 'dark' ? Sun : Moon, action: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')) },
-      { id: 'toggle-hidden', label: 'Toggle Hidden macOS Dotfiles', shortcut: 'Cmd+Shift+.', icon: Eye, action: () => setCurPaneState((prev) => ({ ...prev, showHidden: !prev.showHidden })) },
+      { id: 'toggle-hidden', label: 'Toggle Hidden macOS Dotfiles', shortcut: 'Cmd+Shift+.', icon: Eye, action: toggleShowHidden },
       { id: 'open-term', label: 'Open in macOS Terminal', icon: Terminal, action: handleOpenTerminal },
       { id: 'open-code', label: 'Open in VS Code', icon: Code2, action: handleOpenVSCode },
       { id: 'copy-path', label: 'Copy Current Directory Path', icon: Copy, action: () => copyPathToClipboard() },
-      { id: 'view-details', label: 'Switch to Details Table View', shortcut: 'Cmd+1', icon: List, action: () => setCurPaneState((prev) => ({ ...prev, viewMode: 'details' })) },
-      { id: 'view-grid', label: 'Switch to Grid Card View', shortcut: 'Cmd+2', icon: LayoutGrid, action: () => setCurPaneState((prev) => ({ ...prev, viewMode: 'grid' })) },
+      { id: 'view-details', label: 'Switch to Details Table View', shortcut: 'Cmd+1', icon: List, action: () => updateViewMode('details') },
+      { id: 'view-grid', label: 'Switch to Grid Card View', shortcut: 'Cmd+2', icon: LayoutGrid, action: () => updateViewMode('grid') },
       { id: 'toggle-inspector', label: 'Toggle Inspector Preview Pane', shortcut: 'Cmd+I', icon: Sparkles, action: () => setShowInspector((prev) => !prev) }
     ]
     if (!commandQuery.trim()) return list
     const q = commandQuery.toLowerCase()
     return list.filter((c) => c.label.toLowerCase().includes(q))
-  }, [theme, commandQuery, navigateTo, setCurPaneState, handleOpenTerminal, handleOpenVSCode, copyPathToClipboard, handleOpenReorganizeModal, handleOpenCleanerModal, handleOpenUninstallerModal, handleOpenPerfModal])
+  }, [theme, commandQuery, navigateTo, toggleShowHidden, updateViewMode, handleOpenTerminal, handleOpenVSCode, copyPathToClipboard, handleOpenReorganizeModal, handleOpenCleanerModal, handleOpenUninstallerModal, handleOpenPerfModal])
 
   // Render Explorer Pane
   const renderExplorerPane = (paneName) => {
@@ -3583,14 +3776,7 @@ export default function App() {
                   <tr className="text-[11px] uppercase tracking-wider font-semibold text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-[#10141e]/80">
                     <th
                       className="py-1.5 px-3 relative group/th cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors select-none"
-                      onClick={() => {
-                        const setter = paneName === 'left' ? setLeftPane : setRightPane
-                        setter((prev) => ({
-                          ...prev,
-                          sortField: 'name',
-                          sortDirection: prev.sortField === 'name' && prev.sortDirection === 'asc' ? 'desc' : 'asc'
-                        }))
-                      }}
+                      onClick={() => handleSortChange(paneName, 'name')}
                     >
                       <div className="flex items-center gap-1 overflow-hidden pr-3">
                         <span className="truncate">Name</span>
@@ -3611,14 +3797,7 @@ export default function App() {
                     </th>
                     <th
                       className="py-1.5 px-3 relative group/th cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors select-none"
-                      onClick={() => {
-                        const setter = paneName === 'left' ? setLeftPane : setRightPane
-                        setter((prev) => ({
-                          ...prev,
-                          sortField: 'mtime',
-                          sortDirection: prev.sortField === 'mtime' && prev.sortDirection === 'asc' ? 'desc' : 'asc'
-                        }))
-                      }}
+                      onClick={() => handleSortChange(paneName, 'mtime')}
                     >
                       <div className="flex items-center gap-1 overflow-hidden pr-3">
                         <span className="truncate">Date Modified</span>
@@ -3639,14 +3818,7 @@ export default function App() {
                     </th>
                     <th
                       className="py-1.5 px-3 relative group/th cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors select-none"
-                      onClick={() => {
-                        const setter = paneName === 'left' ? setLeftPane : setRightPane
-                        setter((prev) => ({
-                          ...prev,
-                          sortField: 'extension',
-                          sortDirection: prev.sortField === 'extension' && prev.sortDirection === 'asc' ? 'desc' : 'asc'
-                        }))
-                      }}
+                      onClick={() => handleSortChange(paneName, 'extension')}
                     >
                       <div className="flex items-center gap-1 overflow-hidden pr-3">
                         <span className="truncate">Type</span>
@@ -3667,14 +3839,7 @@ export default function App() {
                     </th>
                     <th
                       className="py-1.5 px-3 text-right relative group/th cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors select-none"
-                      onClick={() => {
-                        const setter = paneName === 'left' ? setLeftPane : setRightPane
-                        setter((prev) => ({
-                          ...prev,
-                          sortField: 'size',
-                          sortDirection: prev.sortField === 'size' && prev.sortDirection === 'asc' ? 'desc' : 'asc'
-                        }))
-                      }}
+                      onClick={() => handleSortChange(paneName, 'size')}
                     >
                       <div className="flex items-center justify-end gap-1 overflow-hidden pr-3">
                         <span className="truncate">Size</span>
@@ -3977,10 +4142,10 @@ export default function App() {
           <button
             onClick={() => setShowDefaultManagerModal(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all font-semibold"
-            title="Configure FlowExplorer as Default File Manager & macOS Integration"
+            title="Settings & System Preferences (Cmd+,)"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden sm:inline">Default Manager</span>
+            <Settings className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden sm:inline">Settings</span>
           </button>
 
           <button
@@ -4281,7 +4446,7 @@ export default function App() {
         <div className="flex items-center gap-1 flex-shrink-0">
           <div className="flex items-center bg-slate-200/60 dark:bg-white/5 rounded-lg p-0.5 border border-slate-300 dark:border-white/10">
             <button
-              onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'details' }))}
+              onClick={() => updateViewMode('details')}
               className={`p-1.5 rounded-md transition-colors ${
                 currentPaneState.viewMode === 'details'
                   ? 'bg-white dark:bg-white/15 text-indigo-700 dark:text-white font-bold shadow-sm'
@@ -4292,7 +4457,7 @@ export default function App() {
               <List className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setCurPaneState((prev) => ({ ...prev, viewMode: 'grid' }))}
+              onClick={() => updateViewMode('grid')}
               className={`p-1.5 rounded-md transition-colors ${
                 currentPaneState.viewMode === 'grid'
                   ? 'bg-white dark:bg-white/15 text-indigo-700 dark:text-white font-bold shadow-sm'
@@ -7541,21 +7706,22 @@ export default function App() {
           onClick={() => setShowDefaultManagerModal(false)}
         >
           <div
-            className="w-full max-w-xl rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-[#0f131d] shadow-2xl p-6 flex flex-col gap-4 max-h-[88vh] overflow-hidden relative"
+            className="w-full max-w-2xl rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-[#0f131d] shadow-2xl p-6 flex flex-col gap-4 max-h-[90vh] overflow-hidden relative"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                  <ShieldCheck className="w-6 h-6" />
+                  <Settings className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                    Default File Manager & Preferences
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    Preferences & Settings
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-normal">Auto-Saved</span>
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Make FlowExplorer Pro your primary macOS file navigator and workspace manager
+                    Customize your workspace defaults, startup behavior, and macOS system integration
                   </p>
                 </div>
               </div>
@@ -7567,144 +7733,346 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs">
-              {/* Card 1: Primary File Manager Integration */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2.5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2.5">
-                    <HardDrive className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+              {/* SECTION 1: STARTUP & BEHAVIOR */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Rocket className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Startup & Behavior</span>
+                </div>
+                <div className="space-y-2.5">
+                  {/* Card: Auto Launch at macOS Login */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Launch FlowExplorer at System Startup
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Automatically boot FlowExplorer in the background when logging into macOS.
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const next = !loginItemStatus
+                        setLoginItemStatus(next)
+                        try {
+                          localStorage.setItem('flow_login_item_status', JSON.stringify(next))
+                        } catch {}
+                        if (api.setLoginItemSettings) {
+                          await api.setLoginItemSettings({ openAtLogin: next })
+                          addToast(next ? 'Enabled launch at login' : 'Disabled launch at login', 'success')
+                        }
+                      }}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        loginItemStatus ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          loginItemStatus ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Card: Inbuilt Photo Gallery */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Open Images in Inbuilt Photo Gallery
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Double-clicking images opens FlowExplorer's high-speed gallery with Next & Prev controls.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const next = !useInbuiltGallery
+                        setUseInbuiltGallery(next)
+                        try {
+                          localStorage.setItem('flow_use_inbuilt_gallery', JSON.stringify(next))
+                        } catch {}
+                        addToast(next ? 'Inbuilt Photo Gallery enabled' : 'Images open in external default app', 'info')
+                      }}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        useInbuiltGallery ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          useInbuiltGallery ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Card: Restore Last Working Folder */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Restore Last Visited Folder on Launch
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Always reopen the folder you were working in when you last quit the app.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const next = !restoreLastFolder
+                        setRestoreLastFolder(next)
+                        addToast(next ? 'Enabled last folder restore' : 'FlowExplorer will start at Home folder', 'info')
+                      }}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        restoreLastFolder ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          restoreLastFolder ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: APPEARANCE & VIEW DEFAULTS */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <LayoutGrid className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Appearance & Layout Defaults</span>
+                </div>
+                <div className="space-y-2.5">
+                  {/* Theme Mode */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Interface Theme
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Choose your preferred appearance mode.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-white/10 rounded-lg p-1 border border-slate-300 dark:border-white/10">
+                      <button
+                        onClick={() => setTheme('light')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          theme === 'light' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <Sun className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Light</span>
+                      </button>
+                      <button
+                        onClick={() => setTheme('dark')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          theme === 'dark' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <Moon className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>Dark</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Default View Mode */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Default View Mode
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Choose how files and folders are presented by default.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-white/10 rounded-lg p-1 border border-slate-300 dark:border-white/10">
+                      <button
+                        onClick={() => updateViewMode('details')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          currentPaneState.viewMode === 'details' ? 'bg-white dark:bg-white/15 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <List className="w-3.5 h-3.5" />
+                        <span>Details Table</span>
+                      </button>
+                      <button
+                        onClick={() => updateViewMode('grid')}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          currentPaneState.viewMode === 'grid' ? 'bg-white dark:bg-white/15 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Grid Cards</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Show Hidden Files (.dotfiles) */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Show Hidden Files & Dotfiles
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Display files starting with a dot (<code className="font-mono text-indigo-500">.env</code>, <code className="font-mono text-indigo-500">.git</code>, <code className="font-mono text-indigo-500">.zshrc</code>).
+                      </p>
+                    </div>
+                    <button
+                      onClick={toggleShowHidden}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        currentPaneState.showHidden ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          currentPaneState.showHidden ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Dual Pane View */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Dual-Pane Split View
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Side-by-side file navigation for high-productivity file comparisons and transfers.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsDualPane((prev) => !prev)}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isDualPane ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          isDualPane ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Inspector Preview Pane */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Inspector Preview Pane
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                        Right-side sidebar showing live file previews, telemetry, metadata, and SHA-256 checksums.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowInspector((prev) => !prev)}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        showInspector ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          showInspector ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: macOS SYSTEM INTEGRATION */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>macOS System Integration</span>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2.5">
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
                         Set FlowExplorer as Primary File Manager
                       </div>
-                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed text-[11px]">
                         Registers FlowExplorer Pro as the system directory handler (<code className="font-mono text-indigo-500">public.folder</code>) and custom protocol client (<code className="font-mono text-indigo-500">flowexplorer://</code>).
                       </p>
                     </div>
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
+                      <button
+                        onClick={async () => {
+                          if (api.setDefaultFileManager) {
+                            const res = await api.setDefaultFileManager()
+                            if (res.success) {
+                              addToast('FlowExplorer registered as default protocol client!', 'success')
+                            } else {
+                              addToast(`Registration note: ${res.error || 'Check permissions'}`, 'info')
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20 text-xs"
+                      >
+                        1-Click Register Protocol
+                      </button>
+                      <button
+                        onClick={() => {
+                          api.writeClipboard('duti -s com.smartjaganrao.flowexplorer public.folder all')
+                          addToast('Copied duti command to clipboard!', 'success')
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-300 dark:hover:bg-white/15 transition-all text-xs"
+                      >
+                        Copy duti Command
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
-                  <button
-                    onClick={async () => {
-                      if (api.setDefaultFileManager) {
-                        const res = await api.setDefaultFileManager()
-                        if (res.success) {
-                          addToast('FlowExplorer registered as default protocol client!', 'success')
-                        } else {
-                          addToast(`Registration note: ${res.error || 'Check permissions'}`, 'info')
-                        }
-                      }
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
-                  >
-                    1-Click Register Protocol
-                  </button>
-                  <button
-                    onClick={() => {
-                      api.writeClipboard('duti -s com.smartjaganrao.flowexplorer public.folder all')
-                      addToast('Copied duti command to clipboard!', 'success')
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-300 dark:hover:bg-white/15 transition-all"
-                  >
-                    Copy duti Command
-                  </button>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-slate-100 text-xs">
+                      <Terminal className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Launch from Terminal or Scripts</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-slate-950 text-slate-200 rounded-lg p-2.5 font-mono text-[11px] border border-white/5">
+                      <code>open -a "FlowExplorer Pro" ~/Downloads</code>
+                      <button
+                        onClick={() => {
+                          api.writeClipboard('open -a "FlowExplorer Pro" ~/Downloads')
+                          addToast('Command copied to clipboard!', 'success')
+                        }}
+                        className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Card 2: Auto Launch at macOS Login */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-start gap-2.5">
-                  <Rocket className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                      Launch FlowExplorer at System Startup
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-400 mt-0.5">
-                      Automatically start FlowExplorer in the background when logging into macOS for instant response.
-                    </p>
+              {/* SECTION 4: RESET TO FACTORY DEFAULTS */}
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-xs text-rose-700 dark:text-rose-400">
+                    Reset All Preferences
                   </div>
+                  <p className="text-slate-600 dark:text-slate-400 mt-0.5 text-[11px]">
+                    Restore factory defaults for themes, view modes, column widths, and pane layouts.
+                  </p>
                 </div>
                 <button
-                  onClick={async () => {
-                    const next = !loginItemStatus
-                    setLoginItemStatus(next)
-                    if (api.setLoginItemSettings) {
-                      await api.setLoginItemSettings({ openAtLogin: next })
-                      addToast(next ? 'Enabled launch at login' : 'Disabled launch at login', 'success')
-                    }
-                  }}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    loginItemStatus ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                  }`}
+                  onClick={handleResetSettings}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all shadow-md shadow-rose-600/20 text-xs"
                 >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      loginItemStatus ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
+                  Reset Defaults
                 </button>
-              </div>
-
-              {/* Card 3: Inbuilt Photo Gallery Preference */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
-                <div className="flex items-start gap-2.5">
-                  <Images className="w-5 h-5 text-purple-500 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                      Open Images in Inbuilt Photo Gallery
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-400 mt-0.5">
-                      Double-clicking or pressing Enter on image files opens FlowExplorer's high-speed gallery with Next & Prev controls.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const next = !useInbuiltGallery
-                    setUseInbuiltGallery(next)
-                    localStorage.setItem('flow_use_inbuilt_gallery', JSON.stringify(next))
-                    addToast(next ? 'Inbuilt Photo Gallery enabled' : 'Images will open in external default app', 'info')
-                  }}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    useInbuiltGallery ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      useInbuiltGallery ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Card 4: Terminal CLI Quick Access */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-slate-100">
-                  <Terminal className="w-4 h-4 text-emerald-500" />
-                  <span>Launch from Terminal or Scripts</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-400">
-                  You can open any folder or image directly inside FlowExplorer from Terminal or zsh:
-                </p>
-                <div className="flex items-center justify-between bg-slate-950 text-slate-200 rounded-lg p-2.5 font-mono text-[11px] border border-white/5">
-                  <code>open -a "FlowExplorer Pro" ~/Downloads</code>
-                  <button
-                    onClick={() => {
-                      api.writeClipboard('open -a "FlowExplorer Pro" ~/Downloads')
-                      addToast('Command copied to clipboard!', 'success')
-                    }}
-                    className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] transition-colors"
-                  >
-                    Copy
-                  </button>
-                </div>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-end">
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                All changes persist automatically across app restarts.
+              </span>
               <button
                 onClick={() => setShowDefaultManagerModal(false)}
-                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20 text-xs"
               >
                 Done
               </button>
