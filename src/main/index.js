@@ -266,20 +266,64 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Main Unhandled Rejection]', reason)
 })
 
+let pendingExternalPath = null
+
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('app:open-external-path', filePath)
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  } else {
+    pendingExternalPath = filePath
+  }
+})
+
+app.on('open-url', (event, urlStr) => {
+  event.preventDefault()
+  try {
+    const parsed = new URL(urlStr)
+    const targetPath = decodeURIComponent(parsed.pathname)
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('app:open-external-path', targetPath)
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    } else {
+      pendingExternalPath = targetPath
+    }
+  } catch (err) {
+    console.error('Failed to parse URL:', err)
+  }
+})
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show()
       mainWindow.focus()
+
+      // Check if a path argument was passed
+      const candidatePath = argv.slice(1).find(arg => !arg.startsWith('-') && !arg.includes('electron') && arg.length > 1)
+      if (candidatePath) {
+        mainWindow.webContents.send('app:open-external-path', candidatePath)
+      }
     }
   })
 
   app.whenReady().then(() => {
+    // Check initial process argv for paths
+    const initialArg = process.argv.slice(1).find(arg => !arg.startsWith('-') && !arg.includes('electron') && arg.length > 1)
+    if (initialArg && !pendingExternalPath) {
+      pendingExternalPath = initialArg
+    }
+
     setupIpcHandlers()
     setupAppMenu()
     createWindow()
@@ -1965,6 +2009,46 @@ function setupIpcHandlers() {
         })
       })
     })
+  })
+
+  // 37. Get Initial Open Path (Cold Start via Finder / CLI)
+  ipcMain.handle('fs:get-initial-path', () => {
+    const initial = pendingExternalPath
+    pendingExternalPath = null
+    return initial
+  })
+
+  // 38. Default File Manager Registration
+  ipcMain.handle('fs:set-default-file-manager', async () => {
+    try {
+      const isProtocolSet = app.setAsDefaultProtocolClient('flowexplorer')
+      return {
+        success: true,
+        protocolRegistered: isProtocolSet,
+        dutiCommand: 'duti -s com.smartjaganrao.flowexplorer public.folder all',
+        message: 'FlowExplorer Pro registered as default protocol client & directory handler.'
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // 39. Get & Set macOS Login Item Settings (Auto-start with OS)
+  ipcMain.handle('fs:get-login-item-settings', () => {
+    try {
+      return { success: true, settings: app.getLoginItemSettings() }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle('fs:set-login-item-settings', (_event, settings) => {
+    try {
+      app.setLoginItemSettings(settings)
+      return { success: true, settings: app.getLoginItemSettings() }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
   })
 }
 

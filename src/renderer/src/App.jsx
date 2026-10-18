@@ -11,7 +11,8 @@ import {
   Maximize2, TerminalSquare, Info, Share2, Music, Video,
   ChevronDown, CheckSquare, Clock, FolderTree, Cpu, CheckCircle2,
   Filter, Boxes, AlertTriangle, Zap, Activity, Rocket, Gauge,
-  AppWindow, PackageX, HelpCircle, RotateCcw
+  AppWindow, PackageX, HelpCircle, RotateCcw,
+  ZoomIn, ZoomOut, RotateCw, Images
 } from 'lucide-react'
 import flowLogo from './assets/logo.png'
 
@@ -271,7 +272,12 @@ const createMockAPI = () => {
     onShortcut: () => () => {},
     openPath: async () => ({ success: true }),
     openTerminal: async () => ({ success: true }),
-    openVSCode: async () => ({ success: true })
+    openVSCode: async () => ({ success: true }),
+    getInitialPath: async () => null,
+    onOpenExternalPath: () => () => {},
+    setDefaultFileManager: async () => ({ success: true, protocolRegistered: true }),
+    getLoginItemSettings: async () => ({ success: true, settings: { openAtLogin: false } }),
+    setLoginItemSettings: async (s) => ({ success: true, settings: s })
   }
 }
 
@@ -339,13 +345,21 @@ function FileIcon({ item, className = "w-4 h-4" }) {
   return <File className={`${className} text-slate-400`} />
 }
 
+// Universal Image file extension classifier
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.bmp', '.ico', '.tiff', '.heic', '.raw', '.avif', '.psd']
+function isImageFile(item) {
+  if (!item || item.isDirectory) return false
+  const ext = (item.extension || '').toLowerCase() || (item.name && item.name.includes('.') ? '.' + item.name.split('.').pop().toLowerCase() : '')
+  return IMAGE_EXTENSIONS.includes(ext)
+}
+
 // Client-side cache for high performance thumbnail rendering
 const globalThumbCache = new Map()
 
 function FileThumbnail({ item, mode = 'grid', className = '' }) {
   const [thumb, setThumb] = useState(() => globalThumbCache.get(item.path) || null)
   const ext = (item.extension || '').toLowerCase()
-  const isImage = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.bmp', '.ico', '.tiff', '.heic', '.raw', '.psd'].includes(ext)
+  const isImage = isImageFile(item)
   const isRichDoc = ['.pdf', '.doc', '.docx', '.pages', '.xls', '.xlsx', '.ppt', '.pptx', '.keynote', '.numbers', '.app'].includes(ext)
   const isTextDoc = ['.txt', '.md', '.markdown', '.rtf', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.html', '.css', '.sql', '.sh', '.csv', '.yaml', '.yml', '.env', '.log', '.xml'].includes(ext)
   const isDoc = isRichDoc || isTextDoc
@@ -1100,6 +1114,32 @@ export default function App() {
   // Quick Look Overlay Modal (Space trigger)
   const [quickLookItem, setQuickLookItem] = useState(null)
 
+  // Inbuilt Photo Gallery State (Next & Prev Lightbox)
+  const [photoGallery, setPhotoGallery] = useState({
+    isOpen: false,
+    items: [],
+    currentIndex: 0,
+    zoom: 1,
+    rotation: 0,
+    isFlipped: false,
+    isPlaying: false,
+    previewData: null,
+    loading: false
+  })
+  const filmstripRef = useRef(null)
+
+  // Default File Manager & Preferences Modal State
+  const [showDefaultManagerModal, setShowDefaultManagerModal] = useState(false)
+  const [useInbuiltGallery, setUseInbuiltGallery] = useState(() => {
+    try {
+      const saved = localStorage.getItem('flow_use_inbuilt_gallery')
+      return saved !== null ? JSON.parse(saved) : true
+    } catch {
+      return true
+    }
+  })
+  const [loginItemStatus, setLoginItemStatus] = useState(false)
+
   // Clipboard State (Windows Explorer operation + sourceDir tracking)
   const [clipboard, setClipboard] = useState({
     operation: null,
@@ -1833,17 +1873,171 @@ export default function App() {
     }
   }, [leftPane, rightPane])
 
+  // Inbuilt Photo Gallery Navigation & Controller
+  const openPhotoGallery = useCallback(async (targetItem) => {
+    const allImages = currentPaneState.items.filter(isImageFile)
+    if (allImages.length === 0 && targetItem) {
+      allImages.push(targetItem)
+    }
+    if (allImages.length === 0) {
+      addToast('No image files found in current directory', 'info')
+      return
+    }
+
+    const targetPath = targetItem ? targetItem.path : (allImages[0] ? allImages[0].path : null)
+    const foundIndex = targetPath ? allImages.findIndex((img) => img.path === targetPath) : 0
+    const activeIndex = foundIndex >= 0 ? foundIndex : 0
+    const initialItem = allImages[activeIndex]
+
+    setPhotoGallery({
+      isOpen: true,
+      items: allImages,
+      currentIndex: activeIndex,
+      zoom: 1,
+      rotation: 0,
+      isFlipped: false,
+      isPlaying: false,
+      previewData: null,
+      loading: true
+    })
+
+    try {
+      const res = await api.readPreview(initialItem.path)
+      setPhotoGallery((prev) => ({
+        ...prev,
+        previewData: res.success ? res.previewData : null,
+        loading: false
+      }))
+    } catch {
+      setPhotoGallery((prev) => ({ ...prev, loading: false }))
+    }
+  }, [currentPaneState.items, addToast])
+
+  const handleNextPhoto = useCallback(() => {
+    setPhotoGallery((prev) => {
+      if (prev.items.length === 0) return prev
+      return {
+        ...prev,
+        currentIndex: (prev.currentIndex + 1) % prev.items.length,
+        zoom: 1,
+        rotation: 0,
+        isFlipped: false
+      }
+    })
+  }, [])
+
+  const handlePrevPhoto = useCallback(() => {
+    setPhotoGallery((prev) => {
+      if (prev.items.length === 0) return prev
+      return {
+        ...prev,
+        currentIndex: (prev.currentIndex - 1 + prev.items.length) % prev.items.length,
+        zoom: 1,
+        rotation: 0,
+        isFlipped: false
+      }
+    })
+  }, [])
+
+  // Auto load preview whenever currentIndex updates in Photo Gallery
+  useEffect(() => {
+    if (!photoGallery.isOpen || photoGallery.items.length === 0) return
+    const currentItem = photoGallery.items[photoGallery.currentIndex]
+    if (!currentItem) return
+
+    let isMounted = true
+    setPhotoGallery((prev) => ({ ...prev, loading: true }))
+
+    api.readPreview(currentItem.path).then((res) => {
+      if (isMounted) {
+        setPhotoGallery((prev) => ({
+          ...prev,
+          previewData: res.success ? res.previewData : null,
+          loading: false
+        }))
+      }
+    }).catch(() => {
+      if (isMounted) {
+        setPhotoGallery((prev) => ({ ...prev, loading: false }))
+      }
+    })
+
+    if (filmstripRef.current && filmstripRef.current.children[photoGallery.currentIndex]) {
+      filmstripRef.current.children[photoGallery.currentIndex].scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      })
+    }
+
+    return () => { isMounted = false }
+  }, [photoGallery.isOpen, photoGallery.currentIndex, photoGallery.items])
+
+  // Slideshow auto-advance timer
+  useEffect(() => {
+    if (!photoGallery.isOpen || !photoGallery.isPlaying || photoGallery.items.length <= 1) return
+    const timer = setInterval(() => {
+      setPhotoGallery((prev) => ({
+        ...prev,
+        currentIndex: (prev.currentIndex + 1) % prev.items.length,
+        zoom: 1,
+        rotation: 0
+      }))
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [photoGallery.isOpen, photoGallery.isPlaying, photoGallery.items.length])
+
+  // External Path & System Default File Manager Launch Listener
+  useEffect(() => {
+    if (api.getInitialPath) {
+      api.getInitialPath().then((p) => {
+        if (p) {
+          if (isImageFile({ path: p, name: p })) {
+            openPhotoGallery({ path: p, name: p.split('/').pop() })
+          } else {
+            navigateTo(p)
+          }
+        }
+      })
+    }
+
+    if (api.onOpenExternalPath) {
+      const unbind = api.onOpenExternalPath((externalPath) => {
+        if (!externalPath) return
+        if (isImageFile({ path: externalPath, name: externalPath })) {
+          openPhotoGallery({ path: externalPath, name: externalPath.split('/').pop() })
+        } else {
+          navigateTo(externalPath)
+        }
+      })
+      return () => unbind()
+    }
+  }, [navigateTo, openPhotoGallery])
+
+  // Initial check for macOS Login Item state
+  useEffect(() => {
+    if (api.getLoginItemSettings) {
+      api.getLoginItemSettings().then((res) => {
+        if (res && res.success && res.settings) {
+          setLoginItemStatus(Boolean(res.settings.openAtLogin))
+        }
+      })
+    }
+  }, [])
+
   const handleOpenItem = useCallback(async (item) => {
     if (!item) return
     if (item.isDirectory) {
       navigateTo(item.path)
+    } else if (useInbuiltGallery && isImageFile(item)) {
+      openPhotoGallery(item)
     } else {
       const res = await api.openPath(item.path)
       if (!res.success) {
         addToast(`Cannot open file: ${res.error}`, 'error')
       }
     }
-  }, [navigateTo, addToast])
+  }, [navigateTo, useInbuiltGallery, openPhotoGallery, addToast])
 
   const startInlineRename = useCallback((item) => {
     if (!item) return
@@ -2660,6 +2854,62 @@ export default function App() {
         return
       }
 
+      // Inbuilt Photo Gallery keyboard navigation
+      if (photoGallery.isOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, isOpen: false, isPlaying: false }))
+          return
+        }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key.toLowerCase() === 'n') {
+          e.preventDefault()
+          handleNextPhoto()
+          return
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp' || e.key.toLowerCase() === 'p') {
+          e.preventDefault()
+          handlePrevPhoto()
+          return
+        }
+        if (e.key === ' ') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))
+          return
+        }
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, zoom: Math.min(5, Number((prev.zoom * 1.25).toFixed(2))) }))
+          return
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, zoom: Math.max(0.25, Number((prev.zoom / 1.25).toFixed(2))) }))
+          return
+        }
+        if (e.key === '0') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, zoom: 1 }))
+          return
+        }
+        if (e.key.toLowerCase() === 'r') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, rotation: (prev.rotation + 90) % 360 }))
+          return
+        }
+        if (e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          setPhotoGallery((prev) => ({ ...prev, isFlipped: !prev.isFlipped }))
+          return
+        }
+        if (e.key.toLowerCase() === 'o') {
+          e.preventDefault()
+          const currentItem = photoGallery.items[photoGallery.currentIndex]
+          if (currentItem) api.openPath(currentItem.path)
+          return
+        }
+        return
+      }
+
       // Close QuickLook on Escape or Space
       if (quickLookItem && (e.key === 'Escape' || e.key === ' ')) {
         e.preventDefault()
@@ -2820,13 +3070,19 @@ export default function App() {
         return
       }
 
-      // 17. QUICK LOOK PREVIEW (Space)
+      // 17. QUICK LOOK & INBUILT PHOTO GALLERY PREVIEW (Space)
       if (e.key === ' ') {
         e.preventDefault()
         const selected = Array.from(currentPaneState.selectedPaths)
         if (selected.length === 1) {
           const item = currentPaneState.items.find((i) => i.path === selected[0])
-          if (item) setQuickLookItem(item)
+          if (item) {
+            if (useInbuiltGallery && isImageFile(item)) {
+              openPhotoGallery(item)
+            } else {
+              setQuickLookItem(item)
+            }
+          }
         }
         return
       }
@@ -2937,7 +3193,8 @@ export default function App() {
     activeTabId, activePane, currentPaneState, sortedAndFilteredItems, quickLookItem, clipboard,
     handleNewTab, handleCloseTab, goBack, goForward, goUpOneLevel, refreshCurrent,
     handleCut, handleCopy, handlePaste, handleSelectAll, handleUndo, handleDeleteToTrash,
-    handleTriggerPermanentDelete, handleOpenItem, startInlineRename, setCurPaneState, addToast
+    handleTriggerPermanentDelete, handleOpenItem, startInlineRename, setCurPaneState, addToast,
+    photoGallery, handleNextPhoto, handlePrevPhoto, openPhotoGallery, useInbuiltGallery
   ])
 
   useEffect(() => {
@@ -3716,6 +3973,15 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setShowDefaultManagerModal(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all font-semibold"
+            title="Configure FlowExplorer as Default File Manager & macOS Integration"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden sm:inline">Default Manager</span>
+          </button>
+
+          <button
             onClick={() => setCommandPaletteOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-white/10 transition-all"
           >
@@ -3894,6 +4160,29 @@ export default function App() {
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
             <span className="hidden sm:inline">Batch Rename</span>
+          </button>
+
+          {/* Inbuilt Photo Gallery Trigger */}
+          <button
+            onClick={() => {
+              const selected = Array.from(currentPaneState.selectedPaths)
+              let itemToOpen = null
+              if (selected.length === 1) {
+                const found = currentPaneState.items.find((i) => i.path === selected[0])
+                if (found && isImageFile(found)) itemToOpen = found
+              }
+              openPhotoGallery(itemToOpen)
+            }}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all text-xs font-semibold"
+            title="Open Inbuilt Photo Gallery (Browse all photos with Next / Prev, Zoom, Slideshow)"
+          >
+            <Images className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span className="hidden sm:inline">Photo Gallery</span>
+            {currentPaneState.items.filter(isImageFile).length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                {currentPaneState.items.filter(isImageFile).length}
+              </span>
+            )}
           </button>
 
           {/* New Folder */}
@@ -6294,6 +6583,18 @@ export default function App() {
               >
                 <CornerDownLeft className="w-3.5 h-3.5" /> Open
               </button>
+              {isImageFile(contextMenu.item) && (
+                <button
+                  onClick={() => {
+                    openPhotoGallery(contextMenu.item)
+                    setContextMenu((prev) => ({ ...prev, visible: false }))
+                  }}
+                  className="flex items-center justify-between px-3 py-1.5 hover:bg-purple-600 hover:text-white transition-colors text-left font-semibold text-purple-700 dark:text-purple-300"
+                >
+                  <div className="flex items-center gap-2"><Images className="w-3.5 h-3.5" /> View in Photo Gallery</div>
+                  <kbd className="text-[10px] opacity-60">Enter</kbd>
+                </button>
+              )}
               <button
                 onClick={() => {
                   setQuickLookItem(contextMenu.item)
@@ -6916,6 +7217,431 @@ export default function App() {
                 className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors cursor-pointer"
               >
                 Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 16. INBUILT PHOTO GALLERY FULLSCREEN LIGHTBOX MODAL */}
+      {photoGallery.isOpen && photoGallery.items.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between select-none animate-in fade-in duration-200"
+          onClick={() => setPhotoGallery((prev) => ({ ...prev, isOpen: false, isPlaying: false }))}
+        >
+          {/* Top HUD Controls Bar */}
+          <div
+            className="h-14 px-6 flex items-center justify-between border-b border-white/10 bg-black/40 backdrop-blur-md text-white z-40"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Left: Info */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Images className="w-5 h-5 text-purple-400" />
+                <span className="font-bold text-sm tracking-tight">Photo Gallery</span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
+                  {photoGallery.currentIndex + 1} / {photoGallery.items.length}
+                </span>
+              </div>
+              <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
+              <div className="hidden sm:flex flex-col">
+                <span className="text-xs font-semibold truncate max-w-[260px]">
+                  {photoGallery.items[photoGallery.currentIndex]?.name}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {formatBytes(photoGallery.items[photoGallery.currentIndex]?.size)}
+                </span>
+              </div>
+            </div>
+
+            {/* Center: Zoom & Orientation Controls */}
+            <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2 py-1">
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, zoom: Math.max(0.25, Number((prev.zoom / 1.25).toFixed(2))) }))}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Zoom Out (-)"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, zoom: 1 }))}
+                className="px-2 py-0.5 rounded text-xs font-mono font-bold text-indigo-300 hover:bg-white/10 transition-colors"
+                title="Reset Zoom to 100% (0)"
+              >
+                {Math.round(photoGallery.zoom * 100)}%
+              </button>
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, zoom: Math.min(5, Number((prev.zoom * 1.25).toFixed(2))) }))}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Zoom In (+)"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <div className="h-3.5 w-[1px] bg-white/10 mx-0.5" />
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, rotation: (prev.rotation + 90) % 360 }))}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Rotate 90° Clockwise (R)"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, isFlipped: !prev.isFlipped }))}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Flip Horizontal (F)"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Right: Slideshow & Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                  photoGallery.isPlaying
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/20'
+                    : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border-white/10'
+                }`}
+                title="Toggle Slideshow Play/Pause (Space)"
+              >
+                {photoGallery.isPlaying ? <Pause className="w-3.5 h-3.5 text-emerald-400" /> : <Play className="w-3.5 h-3.5" />}
+                <span className="hidden md:inline">{photoGallery.isPlaying ? 'Playing' : 'Slideshow'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const currentItem = photoGallery.items[photoGallery.currentIndex]
+                  if (currentItem) api.openPath(currentItem.path)
+                }}
+                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors"
+                title="Open in macOS Preview or Default App (O)"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={async () => {
+                  const currentItem = photoGallery.items[photoGallery.currentIndex]
+                  if (!currentItem) return
+                  await api.trash([currentItem.path])
+                  addToast(`Moved ${currentItem.name} to Trash`, 'info')
+                  // Remove from active list
+                  const updated = photoGallery.items.filter((_, idx) => idx !== photoGallery.currentIndex)
+                  if (updated.length === 0) {
+                    setPhotoGallery((prev) => ({ ...prev, isOpen: false }))
+                  } else {
+                    const nextIdx = Math.min(photoGallery.currentIndex, updated.length - 1)
+                    setPhotoGallery((prev) => ({
+                      ...prev,
+                      items: updated,
+                      currentIndex: nextIdx
+                    }))
+                  }
+                  refreshCurrent()
+                }}
+                className="p-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 border border-white/10 transition-colors"
+                title="Move Photo to Trash (Delete)"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setPhotoGallery((prev) => ({ ...prev, isOpen: false, isPlaying: false }))}
+                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+                title="Close Photo Gallery (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Stage: Image Viewport with Next & Prev floating controls */}
+          <div
+            className="flex-1 relative flex items-center justify-center overflow-hidden p-6"
+            onClick={(e) => e.stopPropagation()}
+            onWheel={(e) => {
+              if (e.deltaY < 0) {
+                setPhotoGallery((prev) => ({ ...prev, zoom: Math.min(5, Number((prev.zoom * 1.1).toFixed(2))) }))
+              } else {
+                setPhotoGallery((prev) => ({ ...prev, zoom: Math.max(0.25, Number((prev.zoom / 1.1).toFixed(2))) }))
+              }
+            }}
+          >
+            {/* Previous Photo Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handlePrevPhoto()
+              }}
+              className="absolute left-6 top-1/2 -translate-y-1/2 p-3.5 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 shadow-2xl backdrop-blur-md transition-all hover:scale-110 active:scale-95 z-40 group cursor-pointer"
+              title="Previous Photo (← or PageUp)"
+            >
+              <ChevronLeft className="w-8 h-8 group-hover:-translate-x-0.5 transition-transform" />
+            </button>
+
+            {/* Next Photo Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleNextPhoto()
+              }}
+              className="absolute right-6 top-1/2 -translate-y-1/2 p-3.5 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 shadow-2xl backdrop-blur-md transition-all hover:scale-110 active:scale-95 z-40 group cursor-pointer"
+              title="Next Photo (→ or PageDown)"
+            >
+              <ChevronRight className="w-8 h-8 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+
+            {/* Main Center Image */}
+            <div className="relative flex items-center justify-center max-w-full max-h-full">
+              {photoGallery.loading && !photoGallery.previewData ? (
+                <div className="flex flex-col items-center gap-3 text-indigo-400">
+                  <RefreshCw className="w-8 h-8 animate-spin" />
+                  <span className="text-xs font-mono">Loading high-res image...</span>
+                </div>
+              ) : photoGallery.previewData ? (
+                <img
+                  src={photoGallery.previewData}
+                  alt={photoGallery.items[photoGallery.currentIndex]?.name}
+                  onDoubleClick={() => setPhotoGallery((prev) => ({ ...prev, zoom: prev.zoom === 1 ? 2 : 1 }))}
+                  style={{
+                    transform: `scale(${photoGallery.zoom}) rotate(${photoGallery.rotation}deg) scaleX(${photoGallery.isFlipped ? -1 : 1})`,
+                    transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)'
+                  }}
+                  className="max-h-[66vh] max-w-[85vw] object-contain rounded-xl shadow-2xl select-none cursor-zoom-in"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-slate-400">
+                  <FileImage className="w-16 h-16 opacity-40" />
+                  <span className="text-sm">Cannot preview this image format</span>
+                  <button
+                    onClick={() => {
+                      const cur = photoGallery.items[photoGallery.currentIndex]
+                      if (cur) api.openPath(cur.path)
+                    }}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold"
+                  >
+                    Open in Default App
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Filmstrip Carousel */}
+          <div
+            className="border-t border-white/10 bg-black/60 backdrop-blur-md p-3 z-40"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              ref={filmstripRef}
+              className="flex items-center gap-2.5 overflow-x-auto no-scrollbar max-w-full px-4 py-1"
+            >
+              {photoGallery.items.map((item, idx) => {
+                const isActive = idx === photoGallery.currentIndex
+                return (
+                  <div
+                    key={item.path}
+                    onClick={() => {
+                      setPhotoGallery((prev) => ({
+                        ...prev,
+                        currentIndex: idx,
+                        zoom: 1,
+                        rotation: 0,
+                        isFlipped: false
+                      }))
+                    }}
+                    className={`flex-shrink-0 h-14 w-20 rounded-xl overflow-hidden cursor-pointer transition-all border ${
+                      isActive
+                        ? 'border-indigo-400 ring-2 ring-indigo-400/80 scale-105 shadow-lg shadow-indigo-500/30'
+                        : 'border-white/10 opacity-50 hover:opacity-100 hover:border-white/30'
+                    }`}
+                  >
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/90 text-white text-[10px] p-1 text-center font-mono truncate">
+                      <FileThumbnail item={item} mode="grid" />
+                      <span className="truncate w-full mt-0.5 text-[9px]">{item.name}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 17. DEFAULT FILE MANAGER & PREFERENCES MODAL */}
+      {showDefaultManagerModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowDefaultManagerModal(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-[#0f131d] shadow-2xl p-6 flex flex-col gap-4 max-h-[88vh] overflow-hidden relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                    Default File Manager & Preferences
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Make FlowExplorer Pro your primary macOS file navigator and workspace manager
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDefaultManagerModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs">
+              {/* Card 1: Primary File Manager Integration */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-2.5">
+                    <HardDrive className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                        Set FlowExplorer as Primary File Manager
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Registers FlowExplorer Pro as the system directory handler (<code className="font-mono text-indigo-500">public.folder</code>) and custom protocol client (<code className="font-mono text-indigo-500">flowexplorer://</code>).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
+                  <button
+                    onClick={async () => {
+                      if (api.setDefaultFileManager) {
+                        const res = await api.setDefaultFileManager()
+                        if (res.success) {
+                          addToast('FlowExplorer registered as default protocol client!', 'success')
+                        } else {
+                          addToast(`Registration note: ${res.error || 'Check permissions'}`, 'info')
+                        }
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
+                  >
+                    1-Click Register Protocol
+                  </button>
+                  <button
+                    onClick={() => {
+                      api.writeClipboard('duti -s com.smartjaganrao.flowexplorer public.folder all')
+                      addToast('Copied duti command to clipboard!', 'success')
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-300 dark:hover:bg-white/15 transition-all"
+                  >
+                    Copy duti Command
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Auto Launch at macOS Login */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                <div className="flex items-start gap-2.5">
+                  <Rocket className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      Launch FlowExplorer at System Startup
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-400 mt-0.5">
+                      Automatically start FlowExplorer in the background when logging into macOS for instant response.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const next = !loginItemStatus
+                    setLoginItemStatus(next)
+                    if (api.setLoginItemSettings) {
+                      await api.setLoginItemSettings({ openAtLogin: next })
+                      addToast(next ? 'Enabled launch at login' : 'Disabled launch at login', 'success')
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    loginItemStatus ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      loginItemStatus ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Card 3: Inbuilt Photo Gallery Preference */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                <div className="flex items-start gap-2.5">
+                  <Images className="w-5 h-5 text-purple-500 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      Open Images in Inbuilt Photo Gallery
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-400 mt-0.5">
+                      Double-clicking or pressing Enter on image files opens FlowExplorer's high-speed gallery with Next & Prev controls.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !useInbuiltGallery
+                    setUseInbuiltGallery(next)
+                    localStorage.setItem('flow_use_inbuilt_gallery', JSON.stringify(next))
+                    addToast(next ? 'Inbuilt Photo Gallery enabled' : 'Images will open in external default app', 'info')
+                  }}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    useInbuiltGallery ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      useInbuiltGallery ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Card 4: Terminal CLI Quick Access */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col gap-2">
+                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-slate-100">
+                  <Terminal className="w-4 h-4 text-emerald-500" />
+                  <span>Launch from Terminal or Scripts</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400">
+                  You can open any folder or image directly inside FlowExplorer from Terminal or zsh:
+                </p>
+                <div className="flex items-center justify-between bg-slate-950 text-slate-200 rounded-lg p-2.5 font-mono text-[11px] border border-white/5">
+                  <code>open -a "FlowExplorer Pro" ~/Downloads</code>
+                  <button
+                    onClick={() => {
+                      api.writeClipboard('open -a "FlowExplorer Pro" ~/Downloads')
+                      addToast('Command copied to clipboard!', 'success')
+                    }}
+                    className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-end">
+              <button
+                onClick={() => setShowDefaultManagerModal(false)}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
+              >
+                Done
               </button>
             </div>
           </div>

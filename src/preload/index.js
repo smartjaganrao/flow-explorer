@@ -48,7 +48,17 @@ const explorerAPI = {
   killProcess: (pid) => ipcRenderer.invoke('perf:kill-process', pid),
   optimizeMemory: () => ipcRenderer.invoke('perf:optimize-memory'),
   flushDns: () => ipcRenderer.invoke('perf:flush-dns'),
-  cleanQuicklookCache: () => ipcRenderer.invoke('perf:clean-quicklook-cache')
+  cleanQuicklookCache: () => ipcRenderer.invoke('perf:clean-quicklook-cache'),
+  // Default File Manager & System Integration
+  getInitialPath: () => ipcRenderer.invoke('fs:get-initial-path'),
+  onOpenExternalPath: (callback) => {
+    const listener = (_e, externalPath) => callback(externalPath)
+    ipcRenderer.on('app:open-external-path', listener)
+    return () => ipcRenderer.removeListener('app:open-external-path', listener)
+  },
+  setDefaultFileManager: () => ipcRenderer.invoke('fs:set-default-file-manager'),
+  getLoginItemSettings: () => ipcRenderer.invoke('fs:get-login-item-settings'),
+  setLoginItemSettings: (settings) => ipcRenderer.invoke('fs:set-login-item-settings', settings)
 }
 
 if (process.contextIsolated) {

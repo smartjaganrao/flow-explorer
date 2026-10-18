@@ -61,6 +61,26 @@
       },
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "fileAssociations": [
+        {
+          "ext": ["folder", "directory"],
+          "role": "Editor",
+          "name": "Folder",
+          "description": "Folder / Directory"
+        },
+        {
+          "ext": ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "tiff"],
+          "role": "Viewer",
+          "name": "Image",
+          "description": "Image File"
+        }
+      ],
+      "protocols": [
+        {
+          "name": "FlowExplorer",
+          "schemes": ["flowexplorer"]
+        }
+      ],
       "target": [
         {
           "target": "dmg",
